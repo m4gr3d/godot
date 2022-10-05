@@ -32,12 +32,14 @@ package org.godotengine.editor
 
 import android.Manifest
 import android.app.ActivityManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.*
 import android.util.Log
 import android.widget.Toast
+import androidx.annotation.CallSuper
 import androidx.window.layout.WindowMetricsCalculator
 import org.godotengine.godot.GodotActivity
 import org.godotengine.godot.GodotLib
@@ -64,18 +66,12 @@ open class GodotEditor : GodotActivity() {
 
 		private const val EXTRA_COMMAND_LINE_PARAMS = "command_line_params"
 
-		private const val EDITOR_ID = 777
+		// Command line arguments
 		private const val EDITOR_ARG = "--editor"
 		private const val EDITOR_ARG_SHORT = "-e"
-		private const val EDITOR_PROCESS_NAME_SUFFIX = ":GodotEditor"
 
-		private const val GAME_ID = 667
-		private const val GAME_PROCESS_NAME_SUFFIX = ":GodotGame"
-
-		private const val PROJECT_MANAGER_ID = 555
 		private const val PROJECT_MANAGER_ARG = "--project-manager"
 		private const val PROJECT_MANAGER_ARG_SHORT = "-p"
-		private const val PROJECT_MANAGER_PROCESS_NAME_SUFFIX = ":GodotProjectManager"
 
 		/**
 		 * Sets of constants to specify the window to use to run the project.
@@ -86,6 +82,28 @@ open class GodotEditor : GodotActivity() {
 		private const val ANDROID_WINDOW_AUTO = 0
 		private const val ANDROID_WINDOW_SAME_AS_EDITOR = 1
 		private const val ANDROID_WINDOW_SIDE_BY_SIDE_WITH_EDITOR = 2
+
+		internal const val XR_MODE_ARG = "--xr-mode"
+
+		// Info for the various classes used by the editor
+		private val EDITOR_MAIN_INFO =
+			EditorInstanceInfo(GodotEditor::class.java, 777, ":GodotEditor")
+		internal val PROJECT_MANAGER_INFO =
+			EditorInstanceInfo(GodotProjectManager::class.java, 555, ":GodotProjectManager")
+		// The classes referenced below are only available on openxr builds of the editor.
+		private val XR_EDITOR_MAIN_INFO =
+				EditorInstanceInfo("org.godotengine.editor.GodotXREditor", 1777, ":GodotXREditor")
+		private val XR_RUN_GAME_INFO =
+				EditorInstanceInfo("org.godotengine.editor.GodotXRGame", 1667, ":GodotXRGame")
+	}
+
+	private val runGameInfo: EditorInstanceInfo by lazy {
+		EditorInstanceInfo(
+			GodotGame::class.java,
+			667,
+			":GodotGame",
+			true
+		)
 	}
 
 	private val commandLineParams = ArrayList<String>()
@@ -97,7 +115,7 @@ open class GodotEditor : GodotActivity() {
 
 		val params = intent.getStringArrayExtra(EXTRA_COMMAND_LINE_PARAMS)
 		Log.d(TAG, "Received parameters ${params.contentToString()}")
-		updateCommandLineParams(params)
+		updateCommandLineParams(params?.asList() ?: emptyList())
 
 		if (BuildConfig.BUILD_TYPE == "dev" && WAIT_FOR_DEBUGGER) {
 			Debug.waitForDebugger()
@@ -133,110 +151,140 @@ open class GodotEditor : GodotActivity() {
 		}
 	}
 
-	private fun updateCommandLineParams(args: Array<String>?) {
+	@CallSuper
+	protected open fun updateCommandLineParams(args: List<String>) {
 		// Update the list of command line params with the new args
 		commandLineParams.clear()
-		if (!args.isNullOrEmpty()) {
-			commandLineParams.addAll(listOf(*args))
+		if (args.isNotEmpty()) {
+			commandLineParams.addAll(args)
 		}
 		if (BuildConfig.BUILD_TYPE == "dev") {
 			commandLineParams.add("--benchmark")
 		}
 	}
 
-	override fun getCommandLine() = commandLineParams
+	final override fun getCommandLine() = commandLineParams
 
-	override fun onNewGodotInstanceRequested(args: Array<String>): Int {
-		// Parse the arguments to figure out which activity to start.
-		var targetClass: Class<*> = GodotGame::class.java
-		var instanceId = GAME_ID
+	/**
+	 * Indicates this is an xr enabled build.
+	 */
+	private fun isXrAvailable() = BuildConfig.XR_MODE
 
-		// Whether we should launch the new godot instance in an adjacent window
-		// https://developer.android.com/reference/android/content/Intent#FLAG_ACTIVITY_LAUNCH_ADJACENT
-		var launchAdjacent = shouldGameLaunchAdjacent()
+	/**
+	 * Indicates if this is a 2D activity or a XR activity.
+	 */
+	protected open fun isXrActivity() = false
 
-		for (arg in args) {
-			if (EDITOR_ARG == arg || EDITOR_ARG_SHORT == arg) {
-				targetClass = GodotEditor::class.java
-				launchAdjacent = false
-				instanceId = EDITOR_ID
-				break
-			}
+	/**
+	 * Indicates whether the platform supports hybrid (2D<->XR) apps
+	 */
+	private fun hasHybridAppSupport() = packageManager.hasSystemFeature("oculus.software.vr.app.hybrid")
 
-			if (PROJECT_MANAGER_ARG == arg || PROJECT_MANAGER_ARG_SHORT == arg) {
-				targetClass = GodotProjectManager::class.java
-				launchAdjacent = false
-				instanceId = PROJECT_MANAGER_ID
-				break
+	/**
+	 * Indicates whether a XR activity can be launched.
+	 */
+	private fun canLaunchInXr(): Boolean {
+		return isXrActivity() || (isXrAvailable() && hasHybridAppSupport())
+	}
+
+	private fun getEditorInstanceInfo(args: Array<String>): EditorInstanceInfo {
+		var hasEditor = false
+		var hasProjectManager = false
+		var xrModeOn = false
+
+		var i = 0
+		while (i < args.size) {
+			when (args[i++]) {
+				EDITOR_ARG, EDITOR_ARG_SHORT -> hasEditor = true
+				PROJECT_MANAGER_ARG, PROJECT_MANAGER_ARG_SHORT -> hasProjectManager = true
+				XR_MODE_ARG -> {
+					val argValue = args[i++]
+					xrModeOn = xrModeOn || ("on" == argValue)
+				}
 			}
 		}
+
+		return if (hasProjectManager) {
+			PROJECT_MANAGER_INFO
+		} else if (hasEditor) {
+			if (canLaunchInXr() && xrModeOn) {
+				XR_EDITOR_MAIN_INFO
+			} else {
+				EDITOR_MAIN_INFO
+			}
+		} else {
+			val openxrEnabled = GodotLib.getGlobal("xr/openxr/enabled").toBoolean()
+			if (canLaunchInXr() && openxrEnabled) {
+				XR_RUN_GAME_INFO
+			} else {
+				runGameInfo
+			}
+		}
+	}
+
+	final override fun onNewGodotInstanceRequested(args: Array<String>): Int {
+		val editorInstanceInfo = getEditorInstanceInfo(args)
 
 		// Launch a new activity
-		val newInstance = Intent(this, targetClass)
+		val newInstance = Intent()
+			.setComponent(ComponentName(this, editorInstanceInfo.instanceClassName))
 			.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 			.putExtra(EXTRA_COMMAND_LINE_PARAMS, args)
-		if (launchAdjacent) {
+		if (editorInstanceInfo.checkForLaunchAdjacent && shouldGameLaunchAdjacent()) {
+			Log.d(TAG, "Adding flag for adjacent launch")
 			newInstance.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
 		}
-		if (targetClass == javaClass) {
-			Log.d(TAG, "Restarting $targetClass with parameters ${args.contentToString()}")
+		if (editorInstanceInfo.instanceClassName == javaClass.name) {
+			Log.d(TAG, "Restarting ${editorInstanceInfo.instanceClassName} with parameters ${args.contentToString()}")
 			ProcessPhoenix.triggerRebirth(this, newInstance)
 		} else {
-			Log.d(TAG, "Starting $targetClass with parameters ${args.contentToString()}")
+			Log.d(TAG, "Starting ${editorInstanceInfo.instanceClassName} with parameters ${args.contentToString()}")
 			newInstance.putExtra(EXTRA_NEW_LAUNCH, true)
 			startActivity(newInstance)
 		}
-		return instanceId
+		return editorInstanceInfo.instanceId
 	}
 
-	override fun onGodotForceQuit(godotInstanceId: Int): Boolean {
-		val targetClass: Class<*>?
-		val processNameSuffix: String
-		when (godotInstanceId) {
-			GAME_ID -> {
-				processNameSuffix = GAME_PROCESS_NAME_SUFFIX
-				targetClass = GodotGame::class.java
-			}
-			EDITOR_ID -> {
-				processNameSuffix = EDITOR_PROCESS_NAME_SUFFIX
-				targetClass = GodotEditor::class.java
-			}
-			PROJECT_MANAGER_ID -> {
-				processNameSuffix = PROJECT_MANAGER_PROCESS_NAME_SUFFIX
-				targetClass = GodotProjectManager::class.java
-			}
-			else -> {
-				processNameSuffix = ""
-				targetClass = null
-			}
-		}
+	final override fun onGodotForceQuit(godotInstanceId: Int): Boolean {
+		val editorInstanceInfo = getEditorInstanceInfoForInstanceId(godotInstanceId) ?: return super.onGodotForceQuit(godotInstanceId)
 
-		if (targetClass == javaClass) {
-			Log.d(TAG, "Force quitting $targetClass")
+		if (editorInstanceInfo.instanceClassName == javaClass.name) {
+			Log.d(TAG, "Force quitting ${editorInstanceInfo.instanceClassName}")
 			ProcessPhoenix.forceQuit(this)
 			return true
 		}
 
-		if (processNameSuffix.isBlank()) {
-			return false
-		}
-
-		val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-		val runningProcesses = activityManager.runningAppProcesses
-		for (runningProcess in runningProcesses) {
-			if (runningProcess.processName.endsWith(processNameSuffix)) {
-				// Killing process directly
-				Log.v(TAG, "Killing Godot process ${runningProcess.processName}")
-				Process.killProcess(runningProcess.pid)
-				return true
+		if (editorInstanceInfo.processNameSuffix.isNotBlank()) {
+			val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+			val runningProcesses = activityManager.runningAppProcesses
+			for (runningProcess in runningProcesses) {
+				if (runningProcess.processName.endsWith(editorInstanceInfo.processNameSuffix)) {
+					// Killing process directly
+					Log.v(TAG, "Killing Godot process ${runningProcess.processName}")
+					Process.killProcess(runningProcess.pid)
+					return true
+				}
 			}
 		}
 
-		return false
+		return super.onGodotForceQuit(godotInstanceId)
+	}
+
+	private fun getEditorInstanceInfoForInstanceId(instanceId: Int): EditorInstanceInfo? {
+		return when (instanceId) {
+			runGameInfo.instanceId -> runGameInfo
+			EDITOR_MAIN_INFO.instanceId -> EDITOR_MAIN_INFO
+			PROJECT_MANAGER_INFO.instanceId -> PROJECT_MANAGER_INFO
+
+			XR_RUN_GAME_INFO.instanceId -> XR_RUN_GAME_INFO
+			XR_EDITOR_MAIN_INFO.instanceId -> XR_EDITOR_MAIN_INFO
+
+			else -> null
+		}
 	}
 
 	// Get the screen's density scale
-	protected val isLargeScreen: Boolean
+	private val isLargeScreen: Boolean
 		// Get the minimum window size // Correspond to the EXPANDED window size class.
 		get() {
 			val metrics = WindowMetricsCalculator.getOrCreate().computeMaximumWindowMetrics(this)
@@ -273,6 +321,10 @@ open class GodotEditor : GodotActivity() {
 	protected open fun enablePanAndScaleGestures() =
 		java.lang.Boolean.parseBoolean(GodotLib.getEditorSetting("interface/touchscreen/enable_pan_and_scale_gestures"))
 
+	/**
+	 * Whether we should launch the new godot instance in an adjacent window
+	 * @see https://developer.android.com/reference/android/content/Intent#FLAG_ACTIVITY_LAUNCH_ADJACENT
+	 */
 	private fun shouldGameLaunchAdjacent(): Boolean {
 		return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
 			try {

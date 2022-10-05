@@ -31,6 +31,7 @@
 #ifndef PROJECT_MANAGER_H
 #define PROJECT_MANAGER_H
 
+#include "modules/modules_enabled.gen.h"
 #include "scene/gui/dialogs.h"
 #include "scene/gui/scroll_container.h"
 
@@ -54,6 +55,10 @@ class VBoxContainer;
 
 class ProjectManager : public Control {
 	GDCLASS(ProjectManager, Control);
+
+#if defined(MODULE_VR_EDITOR_ENABLED)
+	bool _open_in_xr = false;
+#endif
 
 	static ProjectManager *singleton;
 
@@ -152,6 +157,9 @@ class ProjectManager : public Control {
 	Button *import_btn = nullptr;
 	Button *scan_btn = nullptr;
 	Button *open_btn = nullptr;
+#if defined(MODULE_VR_EDITOR_ENABLED)
+	Button *open_in_xr_btn = nullptr;
+#endif
 	Button *run_btn = nullptr;
 	Button *rename_btn = nullptr;
 	Button *manage_tags_btn = nullptr;
@@ -175,7 +183,7 @@ class ProjectManager : public Control {
 	void _run_project();
 	void _run_project_confirm();
 	void _open_selected_projects();
-	void _open_selected_projects_ask();
+	void _open_selected_projects_ask(bool p_open_in_xr = false);
 
 	void _install_project(const String &p_zip_path, const String &p_title);
 	void _import_project();

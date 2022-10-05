@@ -112,7 +112,6 @@ public:
 	bool is_hand_tracking_supported();
 	bool is_eye_gaze_interaction_supported();
 
-	bool initialize_on_startup() const;
 	virtual bool is_initialized() const override;
 	virtual bool initialize() override;
 	virtual void uninitialize() override;
