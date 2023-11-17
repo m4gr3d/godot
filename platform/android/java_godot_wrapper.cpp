@@ -77,7 +77,7 @@ GodotJavaWrapper::GodotJavaWrapper(JNIEnv *p_env, jobject p_activity, jobject p_
 	_on_godot_setup_completed = p_env->GetMethodID(godot_class, "onGodotSetupCompleted", "()V");
 	_on_godot_main_loop_started = p_env->GetMethodID(godot_class, "onGodotMainLoopStarted", "()V");
 	_create_new_godot_instance = p_env->GetMethodID(godot_class, "createNewGodotInstance", "([Ljava/lang/String;)I");
-	_get_render_view = p_env->GetMethodID(godot_class, "getRenderView", "()Lorg/godotengine/godot/GodotRenderView;");
+	_get_render_view = p_env->GetMethodID(godot_class, "getRenderView", "(I)Lorg/godotengine/godot/GodotRenderView;");
 	_begin_benchmark_measure = p_env->GetMethodID(godot_class, "nativeBeginBenchmarkMeasure", "(Ljava/lang/String;Ljava/lang/String;)V");
 	_end_benchmark_measure = p_env->GetMethodID(godot_class, "nativeEndBenchmarkMeasure", "(Ljava/lang/String;Ljava/lang/String;)V");
 	_dump_benchmark = p_env->GetMethodID(godot_class, "nativeDumpBenchmark", "(Ljava/lang/String;)V");
@@ -86,9 +86,7 @@ GodotJavaWrapper::GodotJavaWrapper(JNIEnv *p_env, jobject p_activity, jobject p_
 }
 
 GodotJavaWrapper::~GodotJavaWrapper() {
-	if (godot_view) {
-		delete godot_view;
-	}
+	godot_views.clear();
 
 	JNIEnv *env = get_jni_env();
 	ERR_FAIL_NULL(env);
@@ -102,16 +100,18 @@ jobject GodotJavaWrapper::get_activity() {
 	return activity;
 }
 
-GodotJavaViewWrapper *GodotJavaWrapper::get_godot_view() {
+GodotJavaViewWrapper *GodotJavaWrapper::get_godot_view(int id) {
+	GodotJavaViewWrapper *godot_view = godot_views[id];
 	if (godot_view != nullptr) {
 		return godot_view;
 	}
 	if (_get_render_view) {
 		JNIEnv *env = get_jni_env();
 		ERR_FAIL_NULL_V(env, nullptr);
-		jobject godot_render_view = env->CallObjectMethod(godot_instance, _get_render_view);
+		jobject godot_render_view = env->CallObjectMethod(godot_instance, _get_render_view, id);
 		if (!env->IsSameObject(godot_render_view, nullptr)) {
 			godot_view = new GodotJavaViewWrapper(godot_render_view);
+			godot_views[id] = godot_view;
 		}
 	}
 	return godot_view;

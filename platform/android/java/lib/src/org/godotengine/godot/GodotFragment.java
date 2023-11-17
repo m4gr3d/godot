@@ -187,7 +187,12 @@ public class GodotFragment extends Fragment implements IDownloaderClient, GodotH
 		final Activity activity = getActivity();
 		mCurrentIntent = activity.getIntent();
 
-		godot = new Godot(requireContext());
+		if (parentHost != null) {
+			godot = parentHost.getGodot();
+		}
+		if (godot == null) {
+			godot = new Godot(requireContext());
+		}
 		performEngineInitialization();
 		BenchmarkUtils.endBenchmarkMeasure("Startup", "GodotFragment::onCreate");
 	}
@@ -201,7 +206,7 @@ public class GodotFragment extends Fragment implements IDownloaderClient, GodotH
 			}
 
 			godotContainerLayout = godot.onInitRenderView(this);
-			if (godotContainerLayout == null) {
+			if (godotContainerLayout.getChildCount() == 0) {
 				throw new IllegalStateException("Unable to initialize engine render view");
 			}
 		} catch (IllegalStateException e) {
@@ -325,7 +330,7 @@ public class GodotFragment extends Fragment implements IDownloaderClient, GodotH
 	}
 
 	public void onBackPressed() {
-		godot.onBackPressed(this);
+		godot.onBackPressed();
 	}
 
 	/**

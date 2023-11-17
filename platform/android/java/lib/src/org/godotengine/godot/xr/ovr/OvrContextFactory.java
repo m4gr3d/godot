@@ -30,7 +30,7 @@
 
 package org.godotengine.godot.xr.ovr;
 
-import org.godotengine.godot.gl.GLSurfaceView;
+import org.godotengine.godot.render.GLSurfaceView;
 
 import android.opengl.EGL14;
 

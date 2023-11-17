@@ -30,9 +30,9 @@
 
 package org.godotengine.godot;
 
-import org.godotengine.godot.gl.GodotRenderer;
 import org.godotengine.godot.io.directory.DirectoryAccessHandler;
 import org.godotengine.godot.io.file.FileAccessHandler;
+import org.godotengine.godot.render.GLSurfaceView;
 import org.godotengine.godot.tts.GodotTTS;
 import org.godotengine.godot.utils.GodotNetUtils;
 
@@ -65,7 +65,6 @@ public class GodotLib {
 
 	/**
 	 * Invoked on the main thread to clean up Godot native layer.
-	 * @see androidx.fragment.app.Fragment#onDestroy()
 	 */
 	public static native void ondestroy();
 
@@ -80,15 +79,15 @@ public class GodotLib {
 	 * @param p_surface
 	 * @param p_width
 	 * @param p_height
-	 * @see org.godotengine.godot.gl.GLSurfaceView.Renderer#onSurfaceChanged(GL10, int, int)
+	 * @see GLSurfaceView.Renderer#onRenderSurfaceChanged(int, Surface, int, int)
 	 */
-	public static native void resize(Surface p_surface, int p_width, int p_height);
+	public static native void resize(int surfaceId, Surface p_surface, int p_width, int p_height);
 
 	/**
 	 * Invoked on the render thread when the underlying Android surface is created or recreated.
 	 * @param p_surface
 	 */
-	public static native void newcontext(Surface p_surface);
+	public static native void newcontext(int surfaceId, Surface p_surface);
 
 	/**
 	 * Forward {@link Activity#onBackPressed()} event.
@@ -97,7 +96,7 @@ public class GodotLib {
 
 	/**
 	 * Invoked on the GL thread to draw the current frame.
-	 * @see org.godotengine.godot.gl.GLSurfaceView.Renderer#onDrawFrame(GL10)
+	 * @see GLSurfaceView.Renderer#onRenderDrawFrame()
 	 */
 	public static native boolean step();
 
@@ -171,13 +170,11 @@ public class GodotLib {
 
 	/**
 	 * Invoked when the Android app resumes.
-	 * @see androidx.fragment.app.Fragment#onResume()
 	 */
 	public static native void focusin();
 
 	/**
 	 * Invoked when the Android app pauses.
-	 * @see androidx.fragment.app.Fragment#onPause()
 	 */
 	public static native void focusout();
 
@@ -230,14 +227,14 @@ public class GodotLib {
 	public static native void setVirtualKeyboardHeight(int p_height);
 
 	/**
-	 * Invoked on the GL thread when the {@link GodotRenderer} has been resumed.
-	 * @see GodotRenderer#onActivityResumed()
+	 * Invoked on the GL thread when the {@link org.godotengine.godot.render.GodotRenderer} has been resumed.
+	 * @see org.godotengine.godot.render.GodotRenderer#onActivityResumed()
 	 */
 	public static native void onRendererResumed();
 
 	/**
-	 * Invoked on the GL thread when the {@link GodotRenderer} has been paused.
-	 * @see GodotRenderer#onActivityPaused()
+	 * Invoked on the GL thread when the {@link org.godotengine.godot.render.GodotRenderer} has been paused.
+	 * @see org.godotengine.godot.render.GodotRenderer#onActivityPaused()
 	 */
 	public static native void onRendererPaused();
 

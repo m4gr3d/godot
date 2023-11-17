@@ -37,22 +37,19 @@ import android.view.SurfaceView;
 public interface GodotRenderView {
 	SurfaceView getView();
 
-	void initInputDevices();
+	void setId(int id);
+
+	int getId();
 
 	/**
 	 * Starts the thread that will drive Godot's rendering.
 	 */
 	void startRenderer();
 
+	/**
+	 * Queues a runnable to be run on the rendering thread.
+	 */
 	void queueOnRenderThread(Runnable event);
-
-	void onActivityPaused();
-
-	void onActivityStopped();
-
-	void onActivityResumed();
-
-	void onActivityStarted();
 
 	void onBackPressed();
 

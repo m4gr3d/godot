@@ -30,7 +30,7 @@
 
 package org.godotengine.godot.xr.ovr;
 
-import org.godotengine.godot.gl.GLSurfaceView;
+import org.godotengine.godot.render.GLSurfaceView;
 
 import javax.microedition.khronos.egl.EGL10;
 import javax.microedition.khronos.egl.EGLConfig;

@@ -44,6 +44,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.*
 import android.util.Log
+import android.util.SparseArray
 import android.view.*
 import android.widget.FrameLayout
 import androidx.annotation.Keep
@@ -53,9 +54,11 @@ import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.vending.expansion.downloader.*
 import org.godotengine.godot.input.GodotEditText
+import org.godotengine.godot.input.GodotInputHandler
 import org.godotengine.godot.io.directory.DirectoryAccessHandler
 import org.godotengine.godot.io.file.FileAccessHandler
 import org.godotengine.godot.plugin.GodotPluginRegistry
+import org.godotengine.godot.render.GodotRenderer
 import org.godotengine.godot.tts.GodotTTS
 import org.godotengine.godot.utils.CommandLineFileParser
 import org.godotengine.godot.utils.GodotNetUtils
@@ -82,13 +85,22 @@ import java.util.*
  */
 class Godot(private val context: Context) : SensorEventListener {
 
-	private companion object {
+	companion object {
 		private val TAG = Godot::class.java.simpleName
 
 		// Supported build flavors
 		const val EDITOR_FLAVOR = "editor"
 		const val TEMPLATE_FLAVOR = "template"
+
+		/**
+		 * Tag for the primary render view.
+		 */
+		internal const val PRIMARY_RENDER_VIEW_ID = 0
 	}
+
+	val inputHandler = GodotInputHandler(context, this)
+
+	private lateinit var renderer: GodotRenderer
 
 	private val windowManager: WindowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 	private val mSensorManager: SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -158,8 +170,16 @@ class Godot(private val context: Context) : SensorEventListener {
 	private var useDebugOpengl = false
 	private var darkMode = false
 
-	private var containerLayout: FrameLayout? = null
-	var renderView: GodotRenderView? = null
+	/**
+	 * Monotonically increasing render view id used to track the registered render views.
+	 */
+	private var renderViewId = PRIMARY_RENDER_VIEW_ID
+	val renderViews = SparseArray<GodotRenderView>()
+
+	@JvmOverloads
+	fun getRenderView(id: Int = PRIMARY_RENDER_VIEW_ID): GodotRenderView? {
+		return renderViews[id]
+	}
 
 	/**
 	 * Returns true if the native engine has been initialized through [onInitNativeLayer], false otherwise.
@@ -329,13 +349,13 @@ class Godot(private val context: Context) : SensorEventListener {
 
 		Log.v(TAG, "OnInitNativeLayer: $host")
 
+		val activity = requireActivity()
 		beginBenchmarkMeasure("Startup", "Godot::onInitNativeLayer")
 		try {
 			if (expansionPackPath.isNotEmpty()) {
 				commandLine.add("--main-pack")
 				commandLine.add(expansionPackPath)
 			}
-			val activity = requireActivity()
 			if (!nativeLayerInitializeCompleted) {
 				nativeLayerInitializeCompleted = GodotLib.initialize(
 					activity,
@@ -361,6 +381,20 @@ class Godot(private val context: Context) : SensorEventListener {
 		} finally {
 			endBenchmarkMeasure("Startup", "Godot::onInitNativeLayer")
 		}
+
+		val useVulkan = usesVulkan()
+		renderer = GodotRenderer(useVulkan)
+		if (useVulkan) {
+			if (!meetsVulkanRequirements(activity.packageManager)) {
+				throw IllegalStateException(activity.getString(R.string.error_missing_vulkan_requirements_message))
+			}
+		}
+
+		for (plugin in pluginRegistry.allPlugins) {
+			plugin.onRegisterPluginWithGodotNative()
+		}
+		setKeepScreenOn(java.lang.Boolean.parseBoolean(GodotLib.getGlobal("display/window/energy_saving/keep_screen_on")))
+
 		return isNativeInitialized()
 	}
 
@@ -373,12 +407,12 @@ class Godot(private val context: Context) : SensorEventListener {
 	 * @param host The [GodotHost] that's initializing the render views
 	 * @param providedContainerLayout Optional argument; if provided, this is reused to host the Godot's render views
 	 *
-	 * @return A [FrameLayout] instance containing Godot's render views if initialization is successful, null otherwise.
+	 * @return A [FrameLayout] instance. It contains Godot's render views if initialization is successful, otherwise it's empty.
 	 *
 	 * @throws IllegalStateException if [onInitNativeLayer] has not been called
 	 */
 	@JvmOverloads
-	fun onInitRenderView(host: GodotHost, providedContainerLayout: FrameLayout = FrameLayout(host.activity)): FrameLayout? {
+	fun onInitRenderView(host: GodotHost, providedContainerLayout: FrameLayout = FrameLayout(host.activity)): FrameLayout {
 		if (!isNativeInitialized()) {
 			throw IllegalStateException("onInitNativeLayer() must be invoked successfully prior to initializing the render view")
 		}
@@ -388,9 +422,8 @@ class Godot(private val context: Context) : SensorEventListener {
 		beginBenchmarkMeasure("Startup", "Godot::onInitRenderView")
 		try {
 			val activity: Activity = host.activity
-			containerLayout = providedContainerLayout
-			containerLayout?.removeAllViews()
-			containerLayout?.layoutParams = ViewGroup.LayoutParams(
+			providedContainerLayout.removeAllViews()
+			providedContainerLayout.layoutParams = ViewGroup.LayoutParams(
 					ViewGroup.LayoutParams.MATCH_PARENT,
 					ViewGroup.LayoutParams.MATCH_PARENT
 			)
@@ -405,34 +438,30 @@ class Godot(private val context: Context) : SensorEventListener {
 			// Prevent GodotEditText from showing on splash screen on devices with Android 14 or newer.
 			editText.setBackgroundColor(Color.TRANSPARENT)
 			// ...add to FrameLayout
-			containerLayout?.addView(editText)
-			renderView = if (usesVulkan()) {
-				if (!meetsVulkanRequirements(activity.packageManager)) {
-					throw IllegalStateException(activity.getString(R.string.error_missing_vulkan_requirements_message))
-				}
-				GodotVulkanRenderView(host, this)
+			providedContainerLayout.addView(editText)
+
+			val renderView: GodotRenderView = if (usesVulkan()) {
+				GodotVulkanRenderView(host, this, renderer, inputHandler)
 			} else {
 				// Fallback to openGl
-				GodotGLRenderView(host, this, xrMode, useDebugOpengl)
+				GodotGLRenderView(host, this, renderer, xrMode, inputHandler, useDebugOpengl)
 			}
+			renderView.id = renderViewId
 
-			if (host == primaryHost) {
-				renderView?.startRenderer()
-			}
-
-			renderView?.let {
-				containerLayout?.addView(
-					it.view,
+			renderView.startRenderer()
+			val view: View = renderView.view
+			providedContainerLayout.addView(
+					view,
 					ViewGroup.LayoutParams(
 							ViewGroup.LayoutParams.MATCH_PARENT,
 							ViewGroup.LayoutParams.MATCH_PARENT
 					)
 				)
-			}
 
 			editText.setView(renderView)
 			io?.setEdit(editText)
 
+			if (renderViewId == PRIMARY_RENDER_VIEW_ID) {
 			// Listeners for keyboard height.
 			val decorView = activity.window.decorView
 			// Report the height of virtual keyboard as it changes during the animation.
@@ -471,36 +500,30 @@ class Godot(private val context: Context) : SensorEventListener {
 				override fun onEnd(animation: WindowInsetsAnimationCompat) {}
 			})
 
-			if (host == primaryHost) {
-				renderView?.queueOnRenderThread {
-					for (plugin in pluginRegistry.allPlugins) {
-						plugin.onRegisterPluginWithGodotNative()
-					}
-					setKeepScreenOn(java.lang.Boolean.parseBoolean(GodotLib.getGlobal("display/window/energy_saving/keep_screen_on")))
-				}
-
 				// Include the returned non-null views in the Godot view hierarchy.
 				for (plugin in pluginRegistry.allPlugins) {
 					val pluginView = plugin.onMainCreate(activity)
 					if (pluginView != null) {
 						if (plugin.shouldBeOnTop()) {
-							containerLayout?.addView(pluginView)
+							providedContainerLayout.addView(pluginView)
 						} else {
-							containerLayout?.addView(pluginView, 0)
+							providedContainerLayout.addView(pluginView, 0)
 						}
 					}
 				}
 			}
+
 			renderViewInitialized = true
+			renderViews[renderView.id] = renderView
+			renderViewId++
 		} finally {
 			if (!renderViewInitialized) {
-				containerLayout?.removeAllViews()
-				containerLayout = null
+				providedContainerLayout.removeAllViews()
 			}
 
 			endBenchmarkMeasure("Startup", "Godot::onInitRenderView")
 		}
-		return containerLayout
+		return providedContainerLayout
 	}
 
 	fun onStart(host: GodotHost) {
@@ -509,7 +532,10 @@ class Godot(private val context: Context) : SensorEventListener {
 			return
 		}
 
-		renderView?.onActivityStarted()
+		renderer.onActivityStarted()
+		for (plugin in pluginRegistry.allPlugins) {
+			plugin.onMainStart()
+		}
 	}
 
 	fun onResume(host: GodotHost) {
@@ -518,7 +544,7 @@ class Godot(private val context: Context) : SensorEventListener {
 			return
 		}
 
-		renderView?.onActivityResumed()
+		renderer.onActivityResumed()
 		if (mAccelerometer != null) {
 			mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_GAME)
 		}
@@ -551,11 +577,11 @@ class Godot(private val context: Context) : SensorEventListener {
 			return
 		}
 
-		renderView?.onActivityPaused()
-		mSensorManager.unregisterListener(this)
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainPause()
 		}
+		renderer.onActivityPaused()
+		mSensorManager.unregisterListener(this)
 	}
 
 	fun onStop(host: GodotHost) {
@@ -564,7 +590,10 @@ class Godot(private val context: Context) : SensorEventListener {
 			return
 		}
 
-		renderView?.onActivityStopped()
+		for (plugin in pluginRegistry.allPlugins) {
+			plugin.onMainStop()
+		}
+		renderer.onActivityStopped()
 	}
 
 	fun onDestroy(primaryHost: GodotHost) {
@@ -576,11 +605,7 @@ class Godot(private val context: Context) : SensorEventListener {
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainDestroy()
 		}
-
-		runOnRenderThread {
-			GodotLib.ondestroy()
-			forceQuit()
-		}
+		renderer.onActivityDestroyed()
 	}
 
 	/**
@@ -634,7 +659,7 @@ class Godot(private val context: Context) : SensorEventListener {
 		val rotaryInputAxisValue = GodotLib.getGlobal("input_devices/pointing/android/rotary_input_scroll_axis")
 
 		runOnUiThread {
-			renderView?.inputHandler?.apply {
+			inputHandler.apply {
 				enableLongPress(longPressEnabled)
 				enablePanningAndScalingGestures(panScaleEnabled)
 				try {
@@ -708,7 +733,7 @@ class Godot(private val context: Context) : SensorEventListener {
 	 * This must be called after the render thread has started.
 	 */
 	fun runOnRenderThread(action: Runnable) {
-		renderView?.queueOnRenderThread(action)
+		renderer.queueOnRenderThread(action)
 	}
 
 	/**
@@ -731,9 +756,9 @@ class Godot(private val context: Context) : SensorEventListener {
 	 * Returns true if `Vulkan` is used for rendering.
 	 */
 	private fun usesVulkan(): Boolean {
-		val renderer = GodotLib.getGlobal("rendering/renderer/rendering_method")
+		val renderingMethod = GodotLib.getGlobal("rendering/renderer/rendering_method")
 		val renderingDevice = GodotLib.getGlobal("rendering/rendering_device/driver")
-		return ("forward_plus" == renderer || "mobile" == renderer) && "vulkan" == renderingDevice
+		return ("forward_plus" == renderingMethod || "mobile" == renderingMethod) && "vulkan" == renderingDevice
 	}
 
 	/**
@@ -817,11 +842,7 @@ class Godot(private val context: Context) : SensorEventListener {
 		} ?: return false
 	}
 
-	fun onBackPressed(host: GodotHost) {
-		if (host != primaryHost) {
-			return
-		}
-
+	fun onBackPressed() {
 		var shouldQuit = true
 		for (plugin in pluginRegistry.allPlugins) {
 			if (plugin.onMainBackPressed()) {
@@ -829,7 +850,7 @@ class Godot(private val context: Context) : SensorEventListener {
 			}
 		}
 		if (shouldQuit) {
-			renderView?.queueOnRenderThread { GodotLib.back() }
+			renderer.queueOnRenderThread { GodotLib.back() }
 		}
 	}
 
@@ -864,37 +885,33 @@ class Godot(private val context: Context) : SensorEventListener {
 	}
 
 	override fun onSensorChanged(event: SensorEvent) {
-		if (renderView == null) {
-			return
-		}
-
 		val rotatedValues = getRotatedValues(event.values)
 
 		when (event.sensor.type) {
 			Sensor.TYPE_ACCELEROMETER -> {
 				rotatedValues?.let {
-					renderView?.queueOnRenderThread {
+					renderer.queueOnRenderThread {
 						GodotLib.accelerometer(-it[0], -it[1], -it[2])
 					}
 				}
 			}
 			Sensor.TYPE_GRAVITY -> {
 				rotatedValues?.let {
-					renderView?.queueOnRenderThread {
+					renderer.queueOnRenderThread {
 						GodotLib.gravity(-it[0], -it[1], -it[2])
 					}
 				}
 			}
 			Sensor.TYPE_MAGNETIC_FIELD -> {
 				rotatedValues?.let {
-					renderView?.queueOnRenderThread {
+					renderer.queueOnRenderThread {
 						GodotLib.magnetometer(-it[0], -it[1], -it[2])
 					}
 				}
 			}
 			Sensor.TYPE_GYROSCOPE -> {
 				rotatedValues?.let {
-					renderView?.queueOnRenderThread {
+					renderer.queueOnRenderThread {
 						GodotLib.gyroscope(it[0], it[1], it[2])
 					}
 				}
@@ -1038,7 +1055,7 @@ class Godot(private val context: Context) : SensorEventListener {
 
 	@Keep
 	private fun initInputDevices() {
-		renderView?.initInputDevices()
+		inputHandler.initInputDevices()
 	}
 
 	@Keep

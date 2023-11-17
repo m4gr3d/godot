@@ -30,7 +30,7 @@
 
 package org.godotengine.godot.xr.regular;
 
-import org.godotengine.godot.gl.GLSurfaceView;
+import org.godotengine.godot.render.GLSurfaceView;
 import org.godotengine.godot.utils.GLUtils;
 
 import android.util.Log;

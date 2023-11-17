@@ -201,6 +201,16 @@ public abstract class GodotPlugin {
 	public void onMainPause() {}
 
 	/**
+	 * @see Activity#onStop()
+	 */
+	public void onMainStop() {}
+
+	/**
+	 * @see Activity#onStart()
+	 */
+	public void onMainStart() {}
+
+	/**
 	 * @see Activity#onResume()
 	 */
 	public void onMainResume() {}
@@ -232,37 +242,71 @@ public abstract class GodotPlugin {
 	/**
 	 * When using the OpenGL renderer, this is invoked once per frame on the GL thread after the
 	 * frame is drawn.
+	 *
+	 * @deprecated Use {@link #onRenderDrawFrame()} instead.
 	 */
+	@Deprecated
 	public void onGLDrawFrame(GL10 gl) {}
 
 	/**
 	 * When using the OpenGL renderer, this is called on the GL thread after the surface is created
 	 * and whenever the OpenGL ES surface size changes.
+	 *
+	 * @deprecated Use {@link #onRenderSurfaceChanged(int, Surface, int, int)} instead.
 	 */
+	@Deprecated
 	public void onGLSurfaceChanged(GL10 gl, int width, int height) {}
 
 	/**
 	 * When using the OpenGL renderer, this is called on the GL thread when the surface is created
 	 * or recreated.
+	 *
+	 * @deprecated Use {@link #onRenderSurfaceCreated(int, Surface)} instead.
 	 */
+	@Deprecated
 	public void onGLSurfaceCreated(GL10 gl, EGLConfig config) {}
+
+	/**
+	 * This is called on the render thread when the surface is created or recreated.
+	 */
+	public void onRenderSurfaceCreated(int surfaceId, Surface surface) {}
+
+	/**
+	 * This is called on the render thread after the surface is created and whenever the surface
+	 * size changes.
+	 */
+	public void onRenderSurfaceChanged(int surfaceId, Surface surface, int width, int height) {}
+
+	/**
+	 * Invoked once per frame on the render thread after the frame is drawn.
+	 */
+	public void onRenderDrawFrame() {}
 
 	/**
 	 * When using the Vulkan renderer, this is invoked once per frame on the Vulkan thread after
 	 * the frame is drawn.
+	 *
+	 * @deprecated Use {@link #onRenderDrawFrame()} instead.
 	 */
+	@Deprecated
 	public void onVkDrawFrame() {}
 
 	/**
 	 * When using the Vulkan renderer, this is called on the Vulkan thread after the surface is
 	 * created and whenever the surface size changes.
+	 *
+	 * @deprecated Use {@link #onRenderSurfaceChanged(int, Surface, int, int)} instead.
 	 */
+	@Deprecated
 	public void onVkSurfaceChanged(Surface surface, int width, int height) {}
 
 	/**
 	 * When using the Vulkan renderer, this is called on the Vulkan thread when the surface is
 	 * created or recreated.
+	 *
+	 * @deprecated Use {@link #onRenderSurfaceCreated(int, Surface)} instead.
 	 */
+	@Deprecated
 	public void onVkSurfaceCreated(Surface surface) {}
 
 	/**

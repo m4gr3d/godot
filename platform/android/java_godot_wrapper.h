@@ -34,6 +34,7 @@
 #include "java_godot_view_wrapper.h"
 #include "string_android.h"
 
+#include "core/templates/hash_map.h"
 #include "core/templates/list.h"
 
 #include <android/log.h>
@@ -47,7 +48,7 @@ private:
 	jclass godot_class;
 	jclass activity_class;
 
-	GodotJavaViewWrapper *godot_view = nullptr;
+	HashMap<int, GodotJavaViewWrapper *> godot_views;
 
 	jmethodID _restart = nullptr;
 	jmethodID _finish = nullptr;
@@ -81,7 +82,7 @@ public:
 
 	jobject get_activity();
 
-	GodotJavaViewWrapper *get_godot_view();
+	GodotJavaViewWrapper *get_godot_view(int id = 0);
 
 	void on_godot_setup_completed(JNIEnv *p_env = nullptr);
 	void on_godot_main_loop_started(JNIEnv *p_env = nullptr);

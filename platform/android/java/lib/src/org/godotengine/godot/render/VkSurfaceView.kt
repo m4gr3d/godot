@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  VkRenderer.kt                                                         */
+/*  VkSurfaceView.kt                                                      */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,81 +28,65 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-@file:JvmName("VkRenderer")
-package org.godotengine.godot.vulkan
+@file:JvmName("VkSurfaceView")
+package org.godotengine.godot.render
 
-import android.view.Surface
-
-import org.godotengine.godot.Godot
-import org.godotengine.godot.GodotLib
-import org.godotengine.godot.plugin.GodotPlugin
-import org.godotengine.godot.plugin.GodotPluginRegistry
+import android.content.Context
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 
 /**
- * Responsible to setting up and driving the Vulkan rendering logic.
- *
- * <h3>Threading</h3>
- * The renderer will be called on a separate thread, so that rendering
- * performance is decoupled from the UI thread. Clients typically need to
- * communicate with the renderer from the UI thread, because that's where
- * input events are received. Clients can communicate using any of the
- * standard Java techniques for cross-thread communication, or they can
- * use the  [VkSurfaceView.queueOnVkThread] convenience method.
- *
- * @see [VkSurfaceView.startRenderer]
+ * An implementation of SurfaceView that uses the dedicated surface for
+ * displaying Vulkan rendering.
+ * <p>
+ * A [VkSurfaceView] provides the following features:
+ * <p>
+ * <ul>
+ * <li>Manages a surface, which is a special piece of memory that can be
+ * composited into the Android view system.
+ * <li>Accepts [GodotRenderer] object that does the actual rendering.
+ * <li>Renders on the [VkThread] thread provided by the [GodotRenderer] to decouple rendering
+ * performance from the UI thread.
+ * </ul>
  */
-internal class VkRenderer {
-	private val pluginRegistry: GodotPluginRegistry = GodotPluginRegistry.getPluginRegistry()
-
-	/**
-	 * Called when the surface is created and signals the beginning of rendering.
-	 */
-	fun onVkSurfaceCreated(surface: Surface) {
-		GodotLib.newcontext(surface)
-
-		for (plugin in pluginRegistry.getAllPlugins()) {
-			plugin.onVkSurfaceCreated(surface)
+internal open class VkSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
+	companion object {
+		fun checkState(expression: Boolean, errorMessage: Any) {
+			check(expression) { errorMessage.toString() }
 		}
 	}
 
 	/**
-	 * Called after the surface is created and whenever its size changes.
+	 * Performs the actual rendering.
 	 */
-	fun onVkSurfaceChanged(surface: Surface, width: Int, height: Int) {
-		GodotLib.resize(surface, width, height)
+	private lateinit var renderer: GodotRenderer
 
-		for (plugin in pluginRegistry.getAllPlugins()) {
-			plugin.onVkSurfaceChanged(surface, width, height)
-		}
+	init {
+		isClickable = true
+		holder.addCallback(this)
 	}
 
 	/**
-	 * Called to draw the current frame.
+	 * Set the [GodotRenderer] associated with the view, and starts the thread that will drive the vulkan
+	 * rendering.
+	 *
+	 * This method should be called once and only once in the life-cycle of [VkSurfaceView].
 	 */
-	fun onVkDrawFrame() {
-		GodotLib.step()
-		for (plugin in pluginRegistry.getAllPlugins()) {
-			plugin.onVkDrawFrame()
-		}
+	fun startRenderer(renderer: GodotRenderer) {
+		checkState(!this::renderer.isInitialized, "startRenderer must only be invoked once")
+		this.renderer = renderer
+		this.renderer.startRenderer()
 	}
 
-	/**
-	 * Called when the rendering thread is resumed.
-	 */
-	fun onVkResume() {
-		GodotLib.onRendererResumed()
+	override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+		renderer.renderThread.vkSurfaceChanged(id, holder, width, height)
 	}
 
-	/**
-	 * Called when the rendering thread is paused.
-	 */
-	fun onVkPause() {
-		GodotLib.onRendererPaused()
+	override fun surfaceDestroyed(holder: SurfaceHolder) {
+		renderer.renderThread.vkSurfaceDestroyed(id, holder)
 	}
 
-	/**
-	 * Called when the rendering thread is destroyed and used as signal to tear down the Vulkan logic.
-	 */
-	fun onVkDestroy() {
+	override fun surfaceCreated(holder: SurfaceHolder) {
+		renderer.renderThread.vkSurfaceCreated(id, holder)
 	}
 }
