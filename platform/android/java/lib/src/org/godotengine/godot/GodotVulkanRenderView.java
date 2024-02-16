@@ -45,6 +45,8 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.PointerIcon;
 import android.view.SurfaceView;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 
 import androidx.annotation.Keep;
 
@@ -91,6 +93,11 @@ public class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderV
 	}
 
 	@Override
+	public void queueOnUiThread(Runnable event) {
+		godot.runOnUiThread(event);
+	}
+
+	@Override
 	public void onActivityPaused() {
 		queueOnVkThread(() -> {
 			GodotLib.focusout();
@@ -126,6 +133,16 @@ public class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderV
 	@Override
 	public GodotInputHandler getInputHandler() {
 		return mInputHandler;
+	}
+
+	@Override
+	public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+		return mInputHandler.onCreateInputConnection(outAttrs);
+	}
+
+	@Override
+	public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event) {
+		return mInputHandler.onKeyMultiple(keyCode, repeatCount, event) || super.onKeyMultiple(keyCode, repeatCount, event);
 	}
 
 	@SuppressLint("ClickableViewAccessibility")

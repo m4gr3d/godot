@@ -52,7 +52,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.vending.expansion.downloader.*
-import org.godotengine.godot.input.GodotEditText
 import org.godotengine.godot.io.directory.DirectoryAccessHandler
 import org.godotengine.godot.io.file.FileAccessHandler
 import org.godotengine.godot.plugin.GodotPluginRegistry
@@ -395,17 +394,6 @@ class Godot(private val context: Context) : SensorEventListener {
 					ViewGroup.LayoutParams.MATCH_PARENT
 			)
 
-			// GodotEditText layout
-			val editText = GodotEditText(activity)
-			editText.layoutParams =
-					ViewGroup.LayoutParams(
-							ViewGroup.LayoutParams.MATCH_PARENT,
-							activity.resources.getDimension(R.dimen.text_edit_height).toInt()
-					)
-			// Prevent GodotEditText from showing on splash screen on devices with Android 14 or newer.
-			editText.setBackgroundColor(Color.TRANSPARENT)
-			// ...add to FrameLayout
-			containerLayout?.addView(editText)
 			renderView = if (usesVulkan()) {
 				if (!meetsVulkanRequirements(activity.packageManager)) {
 					throw IllegalStateException(activity.getString(R.string.error_missing_vulkan_requirements_message))
@@ -429,9 +417,6 @@ class Godot(private val context: Context) : SensorEventListener {
 					)
 				)
 			}
-
-			editText.setView(renderView)
-			io?.setEdit(editText)
 
 			// Listeners for keyboard height.
 			val decorView = activity.window.decorView

@@ -42,7 +42,6 @@ import org.godotengine.godot.xr.regular.RegularContextFactory;
 import org.godotengine.godot.xr.regular.RegularFallbackConfigChooser;
 
 import android.annotation.SuppressLint;
-import android.content.Context;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -54,6 +53,8 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.PointerIcon;
 import android.view.SurfaceView;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 
 import androidx.annotation.Keep;
 
@@ -113,6 +114,11 @@ public class GodotGLRenderView extends GLSurfaceView implements GodotRenderView 
 	}
 
 	@Override
+	public void queueOnUiThread(Runnable event) {
+		godot.runOnUiThread(event);
+	}
+
+	@Override
 	public void onActivityPaused() {
 		queueEvent(() -> {
 			GodotLib.focusout();
@@ -148,6 +154,16 @@ public class GodotGLRenderView extends GLSurfaceView implements GodotRenderView 
 	@Override
 	public GodotInputHandler getInputHandler() {
 		return inputHandler;
+	}
+
+	@Override
+	public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+		return inputHandler.onCreateInputConnection(outAttrs);
+	}
+
+	@Override
+	public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event) {
+		return inputHandler.onKeyMultiple(keyCode, repeatCount, event) || super.onKeyMultiple(keyCode, repeatCount, event);
 	}
 
 	@SuppressLint("ClickableViewAccessibility")

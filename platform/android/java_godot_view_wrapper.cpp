@@ -51,6 +51,9 @@ GodotJavaViewWrapper::GodotJavaViewWrapper(jobject godot_view) {
 	}
 
 	_can_capture_pointer = env->GetMethodID(_cls, "canCapturePointer", "()Z");
+
+	_show_virtual_keyboard = env->GetMethodID(_cls, "showKeyboardFromNative", "(I)V");
+	_hide_virtual_keyboard = env->GetMethodID(_cls, "hideKeyboardFromNative", "()V");
 }
 
 bool GodotJavaViewWrapper::can_update_pointer_icon() const {
@@ -105,6 +108,28 @@ void GodotJavaViewWrapper::set_pointer_icon(int pointer_type) {
 		ERR_FAIL_NULL(env);
 
 		env->CallVoidMethod(_godot_view, _set_pointer_icon, pointer_type);
+	}
+}
+
+bool GodotJavaViewWrapper::has_virtual_keyboard() {
+	return _show_virtual_keyboard != nullptr && _hide_virtual_keyboard != nullptr;
+}
+
+void GodotJavaViewWrapper::show_virtual_keyboard(int p_keyboard_type) {
+	if (_show_virtual_keyboard != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(_godot_view, _show_virtual_keyboard, p_keyboard_type);
+	}
+}
+
+void GodotJavaViewWrapper::hide_virtual_keyboard() {
+	if (_hide_virtual_keyboard != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(_godot_view, _hide_virtual_keyboard);
 	}
 }
 

@@ -31,6 +31,7 @@
 package org.godotengine.godot;
 
 import org.godotengine.godot.input.GodotInputHandler;
+import org.godotengine.godot.input.VirtualKeyboardType;
 
 import android.view.SurfaceView;
 
@@ -45,6 +46,8 @@ public interface GodotRenderView {
 	void startRenderer();
 
 	void queueOnRenderThread(Runnable event);
+
+	void queueOnUiThread(Runnable event);
 
 	void onActivityPaused();
 
@@ -64,5 +67,13 @@ public interface GodotRenderView {
 
 	default boolean canCapturePointer() {
 		return getInputHandler().canCapturePointer();
+	}
+
+	default void showKeyboardFromNative(int keyboardType) {
+		queueOnUiThread(() -> getInputHandler().showKeyboard(VirtualKeyboardType.values()[keyboardType]));
+	}
+
+	default void hideKeyboardFromNative() {
+		queueOnUiThread(() -> getInputHandler().hideKeyboard());
 	}
 }

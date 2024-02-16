@@ -52,6 +52,9 @@ private:
 	jmethodID _configure_pointer_icon = 0;
 	jmethodID _set_pointer_icon = 0;
 
+	jmethodID _show_virtual_keyboard = 0;
+	jmethodID _hide_virtual_keyboard = 0;
+
 public:
 	GodotJavaViewWrapper(jobject godot_view);
 
@@ -63,6 +66,10 @@ public:
 
 	void configure_pointer_icon(int pointer_type, const String &image_path, const Vector2 &p_hotspot);
 	void set_pointer_icon(int pointer_type);
+
+	bool has_virtual_keyboard();
+	void show_virtual_keyboard(int p_keyboard_type);
+	void hide_virtual_keyboard();
 
 	~GodotJavaViewWrapper();
 };

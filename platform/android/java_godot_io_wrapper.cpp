@@ -61,8 +61,6 @@ GodotIOJavaWrapper::GodotIOJavaWrapper(JNIEnv *p_env, jobject p_godot_io_instanc
 		_get_scaled_density = p_env->GetMethodID(cls, "getScaledDensity", "()F");
 		_get_screen_refresh_rate = p_env->GetMethodID(cls, "getScreenRefreshRate", "(D)D");
 		_get_unique_id = p_env->GetMethodID(cls, "getUniqueID", "()Ljava/lang/String;");
-		_show_keyboard = p_env->GetMethodID(cls, "showKeyboard", "(Ljava/lang/String;IIII)V");
-		_hide_keyboard = p_env->GetMethodID(cls, "hideKeyboard", "()V");
 		_set_screen_orientation = p_env->GetMethodID(cls, "setScreenOrientation", "(I)V");
 		_get_screen_orientation = p_env->GetMethodID(cls, "getScreenOrientation", "()I");
 		_get_system_dir = p_env->GetMethodID(cls, "getSystemDir", "(IZ)Ljava/lang/String;");
@@ -213,28 +211,6 @@ String GodotIOJavaWrapper::get_unique_id() {
 		return jstring_to_string(s, env);
 	} else {
 		return String();
-	}
-}
-
-bool GodotIOJavaWrapper::has_vk() {
-	return (_show_keyboard != nullptr) && (_hide_keyboard != nullptr);
-}
-
-void GodotIOJavaWrapper::show_vk(const String &p_existing, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end) {
-	if (_show_keyboard) {
-		JNIEnv *env = get_jni_env();
-		ERR_FAIL_NULL(env);
-		jstring jStr = env->NewStringUTF(p_existing.utf8().get_data());
-		env->CallVoidMethod(godot_io_instance, _show_keyboard, jStr, p_type, p_max_input_length, p_cursor_start, p_cursor_end);
-		env->DeleteLocalRef(jStr);
-	}
-}
-
-void GodotIOJavaWrapper::hide_vk() {
-	if (_hide_keyboard) {
-		JNIEnv *env = get_jni_env();
-		ERR_FAIL_NULL(env);
-		env->CallVoidMethod(godot_io_instance, _hide_keyboard);
 	}
 }
 

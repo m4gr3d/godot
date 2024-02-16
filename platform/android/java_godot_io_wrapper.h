@@ -56,8 +56,6 @@ private:
 	jmethodID _get_scaled_density = 0;
 	jmethodID _get_screen_refresh_rate = 0;
 	jmethodID _get_unique_id = 0;
-	jmethodID _show_keyboard = 0;
-	jmethodID _hide_keyboard = 0;
 	jmethodID _set_screen_orientation = 0;
 	jmethodID _get_screen_orientation = 0;
 	jmethodID _get_system_dir = 0;
@@ -79,9 +77,6 @@ public:
 	TypedArray<Rect2> get_display_cutouts();
 	Rect2i get_display_safe_area();
 	String get_unique_id();
-	bool has_vk();
-	void show_vk(const String &p_existing, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end);
-	void hide_vk();
 	int get_vk_height();
 	void set_vk_height(int p_height);
 	void set_screen_orientation(int p_orient);

@@ -36,16 +36,22 @@ import org.godotengine.godot.GodotLib;
 import org.godotengine.godot.GodotRenderView;
 
 import android.content.Context;
+import android.content.res.Configuration;
 import android.hardware.input.InputManager;
 import android.os.Build;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.SparseArray;
 import android.util.SparseIntArray;
 import android.view.GestureDetector;
 import android.view.InputDevice;
+import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputMethodManager;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -64,6 +70,7 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 	private final SparseArray<Joystick> mJoysticksDevices = new SparseArray<>(4);
 	private final HashSet<Integer> mHardwareKeyboardIds = new HashSet<>();
 
+	private final Context context;
 	private final GodotRenderView mRenderView;
 	private final InputManager mInputManager;
 	private final GestureDetector gestureDetector;
@@ -78,9 +85,12 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 	private int rotaryInputAxis = ROTARY_INPUT_VERTICAL_AXIS;
 
 	private boolean dispatchInputToRenderThread = false;
+	private KeyCharacterMap keyCharacterMap;
+
+	private VirtualKeyboardType keyboardType = VirtualKeyboardType.KEYBOARD_TYPE_DEFAULT;
 
 	public GodotInputHandler(GodotRenderView godotView) {
-		final Context context = godotView.getView().getContext();
+		context = godotView.getView().getContext();
 		mRenderView = godotView;
 		mInputManager = (InputManager)context.getSystemService(Context.INPUT_SERVICE);
 		mInputManager.registerInputDeviceListener(this, null);
@@ -133,10 +143,6 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 		rotaryInputAxis = axis;
 	}
 
-	boolean hasHardwareKeyboard() {
-		return !mHardwareKeyboardIds.isEmpty();
-	}
-
 	private boolean isKeyEventGameDevice(int source) {
 		// Note that keyboards are often (SOURCE_KEYBOARD | SOURCE_DPAD)
 		if (source == (InputDevice.SOURCE_KEYBOARD | InputDevice.SOURCE_DPAD))
@@ -145,12 +151,86 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 		return (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK || (source & InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD || (source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD;
 	}
 
+	public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+		if (keyboardType != null) {
+			outAttrs.inputType = keyboardType.toAndroidInputType();
+		}
+		return new GodotInputConnection(mRenderView.getView());
+	}
+
+	private boolean hasHardwareKeyboard() {
+		Configuration config = context.getResources().getConfiguration();
+		boolean hasHardwareKeyboardConfig = config.keyboard != Configuration.KEYBOARD_NOKEYS &&
+			config.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO;
+		if (hasHardwareKeyboardConfig) {
+			return true;
+		}
+
+		return !mHardwareKeyboardIds.isEmpty();
+	}
+
+	public void showKeyboard(VirtualKeyboardType keyboardType) {
+		this.keyboardType = keyboardType;
+
+		if (hasHardwareKeyboard()) {
+			return;
+		}
+
+		mRenderView.getView().requestFocus();
+		final InputMethodManager imm = (InputMethodManager)context.getSystemService(Context.INPUT_METHOD_SERVICE);
+		imm.showSoftInput(mRenderView.getView(), 0);
+	}
+
+	public void hideKeyboard() {
+		if (hasHardwareKeyboard()) {
+			return;
+		}
+
+		mRenderView.getView().requestFocus();
+		final InputMethodManager imm = (InputMethodManager)context.getSystemService(Context.INPUT_METHOD_SERVICE);
+		imm.hideSoftInputFromWindow(mRenderView.getView().getWindowToken(), 0);
+	}
+
 	public boolean canCapturePointer() {
 		return lastSeenToolType == MotionEvent.TOOL_TYPE_MOUSE;
 	}
 
 	public void onPointerCaptureChange(boolean hasCapture) {
 		godotGestureHandler.onPointerCaptureChange(hasCapture);
+	}
+
+	public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event) {
+		if (keyCode == KeyEvent.KEYCODE_UNKNOWN) {
+			String eventChars = event.getCharacters();
+			if (!TextUtils.isEmpty(eventChars)) {
+				if (keyCharacterMap == null) {
+					keyCharacterMap = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD);
+				}
+
+				KeyEvent[] charEvents = keyCharacterMap.getEvents(eventChars.toCharArray());
+				if (charEvents != null) {
+					for (KeyEvent charEvent : charEvents) {
+						switch (charEvent.getAction()) {
+							case KeyEvent.ACTION_DOWN:
+								onKeyDown(charEvent.getKeyCode(), charEvent);
+								break;
+
+							case KeyEvent.ACTION_UP:
+								onKeyUp(charEvent.getKeyCode(), charEvent);
+								break;
+						}
+					}
+				}
+				return true;
+			}
+		} else {
+			for (int i = 0; i < repeatCount; i++) {
+				onKeyDown(keyCode, event);
+				onKeyUp(keyCode, event);
+			}
+			return true;
+		}
+		return false;
 	}
 
 	public boolean onKeyUp(final int keyCode, KeyEvent event) {

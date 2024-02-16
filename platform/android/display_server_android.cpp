@@ -277,22 +277,28 @@ bool DisplayServerAndroid::is_touchscreen_available() const {
 }
 
 void DisplayServerAndroid::virtual_keyboard_show(const String &p_existing_text, const Rect2 &p_screen_rect, VirtualKeyboardType p_type, int p_max_length, int p_cursor_start, int p_cursor_end) {
-	GodotIOJavaWrapper *godot_io_java = OS_Android::get_singleton()->get_godot_io_java();
-	ERR_FAIL_NULL(godot_io_java);
+	GodotJavaWrapper *godot_java = OS_Android::get_singleton()->get_godot_java();
+	ERR_FAIL_NULL(godot_java);
 
-	if (godot_io_java->has_vk()) {
-		godot_io_java->show_vk(p_existing_text, (int)p_type, p_max_length, p_cursor_start, p_cursor_end);
+	GodotJavaViewWrapper *godot_java_view = godot_java->get_godot_view();
+	ERR_FAIL_NULL(godot_java_view);
+
+	if (godot_java_view->has_virtual_keyboard()) {
+		godot_java_view->show_virtual_keyboard((int)p_type);
 	} else {
 		ERR_PRINT("Virtual keyboard not available");
 	}
 }
 
 void DisplayServerAndroid::virtual_keyboard_hide() {
-	GodotIOJavaWrapper *godot_io_java = OS_Android::get_singleton()->get_godot_io_java();
-	ERR_FAIL_NULL(godot_io_java);
+	GodotJavaWrapper *godot_java = OS_Android::get_singleton()->get_godot_java();
+	ERR_FAIL_NULL(godot_java);
 
-	if (godot_io_java->has_vk()) {
-		godot_io_java->hide_vk();
+	GodotJavaViewWrapper *godot_java_view = godot_java->get_godot_view();
+	ERR_FAIL_NULL(godot_java_view);
+
+	if (godot_java_view->has_virtual_keyboard()) {
+		godot_java_view->hide_virtual_keyboard();
 	} else {
 		ERR_PRINT("Virtual keyboard not available");
 	}
