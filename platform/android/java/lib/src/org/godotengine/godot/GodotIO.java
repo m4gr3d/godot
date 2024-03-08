@@ -36,7 +36,6 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
-import android.graphics.Point;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
@@ -55,8 +54,9 @@ import java.io.File;
 import java.util.List;
 import java.util.Locale;
 
-// Wrapper for native library
-
+/**
+ * Provides access to IO related utilities.
+ */
 public class GodotIO {
 	private static final String TAG = GodotIO.class.getSimpleName();
 
@@ -218,16 +218,13 @@ public class GodotIO {
 
 	public void showKeyboard(String p_existing_text, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end) {
 		if (edit != null) {
-			edit.showKeyboard(p_existing_text, GodotEditText.VirtualKeyboardType.values()[p_type], p_max_input_length, p_cursor_start, p_cursor_end);
+			activity.runOnUiThread(() -> edit.showKeyboard(p_existing_text, GodotEditText.VirtualKeyboardType.values()[p_type], p_max_input_length, p_cursor_start, p_cursor_end));
 		}
-
-		//InputMethodManager inputMgr = (InputMethodManager)activity.getSystemService(Context.INPUT_METHOD_SERVICE);
-		//inputMgr.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
 	}
 
 	public void hideKeyboard() {
 		if (edit != null)
-			edit.hideKeyboard();
+			activity.runOnUiThread(() -> edit.hideKeyboard());
 	}
 
 	public void setScreenOrientation(int p_orientation) {

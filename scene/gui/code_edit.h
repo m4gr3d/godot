@@ -78,7 +78,7 @@ private:
 	/* Auto brace completion */
 	bool auto_brace_completion_enabled = false;
 
-	/* BracePair open_key must be uniquie and ordered by length. */
+	/* BracePair open_key must be unique and ordered by length. */
 	struct BracePair {
 		String open_key = "";
 		String close_key = "";
