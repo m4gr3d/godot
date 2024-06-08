@@ -97,9 +97,11 @@ open class GodotEditor : GodotActivity() {
 	override fun onCreate(savedInstanceState: Bundle?) {
 		installSplashScreen()
 
-		// We exclude certain permissions from the set we request at startup, as they'll be
-		// requested on demand based on use-cases.
-		PermissionsUtil.requestManifestPermissions(this, setOf(Manifest.permission.RECORD_AUDIO))
+		if (BuildConfig.BUILD_TYPE != "benchmark") {
+			// We exclude certain permissions from the set we request at startup, as they'll be
+			// requested on demand based on use-cases.
+			PermissionsUtil.requestManifestPermissions(this, setOf(Manifest.permission.RECORD_AUDIO))
+		}
 
 		val params = intent.getStringArrayExtra(EXTRA_COMMAND_LINE_PARAMS)
 		Log.d(TAG, "Starting intent $intent with parameters ${params.contentToString()}")

@@ -656,6 +656,9 @@ class Godot(private val context: Context) : SensorEventListener {
 	 */
 	private fun onGodotMainLoopStarted() {
 		Log.v(TAG, "OnGodotMainLoopStarted")
+		runOnUiThread {
+			getActivity()?.reportFullyDrawn()
+		}
 
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onGodotMainLoopStarted()
