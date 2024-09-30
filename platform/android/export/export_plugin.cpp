@@ -2623,10 +2623,6 @@ bool EditorExportPlatformAndroid::has_valid_export_configuration(const Ref<Edito
 			err += template_err;
 		}
 	} else {
-#ifdef ANDROID_ENABLED
-		err += TTR("Gradle build is not supported for the Android editor.") + "\n";
-		valid = false;
-#else
 		// Validate the custom gradle android source template.
 		bool android_source_template_valid = false;
 		const String android_source_template = p_preset->get("gradle_build/android_source_template");
@@ -2649,7 +2645,6 @@ bool EditorExportPlatformAndroid::has_valid_export_configuration(const Ref<Edito
 		}
 
 		valid = installed_android_build_template && !r_missing_templates;
-#endif
 	}
 
 	// Validate the rest of the export configuration.
