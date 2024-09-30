@@ -7303,8 +7303,8 @@ EditorNode::EditorNode() {
 
 	project_menu->add_separator();
 	project_menu->add_shortcut(ED_SHORTCUT_AND_COMMAND("editor/export", TTR("Export..."), Key::NONE, TTR("Export")), FILE_EXPORT_PROJECT);
-#ifndef ANDROID_ENABLED
 	project_menu->add_item(TTR("Install Android Build Template..."), FILE_INSTALL_ANDROID_SOURCE);
+#ifndef ANDROID_ENABLED
 	project_menu->add_item(TTR("Open User Data Folder"), RUN_USER_DATA_FOLDER);
 #endif
 
