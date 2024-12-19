@@ -53,8 +53,15 @@ fun isPicoOSDevice(): Boolean {
 }
 
 /**
+ * Returns true if running on an Android XR device.
+ */
+fun isAndroidXRDevice(context: Context): Boolean {
+	return context.packageManager.hasSystemFeature("android.software.xr.immersive")
+}
+
+/**
  * Returns true if running on a native Android XR device.
  */
 fun isNativeXRDevice(context: Context): Boolean {
-	return isHorizonOSDevice(context) || isPicoOSDevice()
+	return isHorizonOSDevice(context) || isPicoOSDevice() || isAndroidXRDevice(context)
 }
