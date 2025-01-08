@@ -41,7 +41,7 @@
 void EditorMainScreen::_notification(int p_what) {
 	switch (p_what) {
 		case NOTIFICATION_READY: {
-			if (EDITOR_3D < buttons.size() && buttons[EDITOR_3D]->is_visible()) {
+			if (buttons.has(EDITOR_3D) && buttons[EDITOR_3D]->is_visible()) {
 				// If the 3D editor is enabled, use this as the default.
 				select(EDITOR_3D);
 				return;
@@ -49,10 +49,10 @@ void EditorMainScreen::_notification(int p_what) {
 
 			// Switch to the first main screen plugin that is enabled. Usually this is
 			// 2D, but may be subsequent ones if 2D is disabled in the feature profile.
-			for (int i = 0; i < buttons.size(); i++) {
-				Button *editor_button = buttons[i];
+			for (const KeyValue<int, Button *> &E : buttons) {
+				Button *editor_button = E.value;
 				if (editor_button->is_visible()) {
-					select(i);
+					select(E.key);
 					return;
 				}
 			}
@@ -60,9 +60,9 @@ void EditorMainScreen::_notification(int p_what) {
 			select(-1);
 		} break;
 		case NOTIFICATION_THEME_CHANGED: {
-			for (int i = 0; i < buttons.size(); i++) {
-				Button *tb = buttons[i];
-				EditorPlugin *p_editor = editor_table[i];
+			for (const KeyValue<int, Button *> &E : buttons) {
+				Button *tb = E.value;
+				EditorPlugin *p_editor = editor_table[E.key];
 				Ref<Texture2D> icon = p_editor->get_plugin_icon();
 
 				if (icon.is_valid()) {
@@ -81,9 +81,9 @@ void EditorMainScreen::set_button_container(HBoxContainer *p_button_hb) {
 
 void EditorMainScreen::save_layout_to_config(Ref<ConfigFile> p_config_file, const String &p_section) const {
 	int selected_main_editor_idx = -1;
-	for (int i = 0; i < buttons.size(); i++) {
-		if (buttons[i]->is_pressed()) {
-			selected_main_editor_idx = i;
+	for (const KeyValue<int, Button *> &E : buttons) {
+		if (E.value->is_pressed()) {
+			selected_main_editor_idx = E.key;
 			break;
 		}
 	}
@@ -96,13 +96,13 @@ void EditorMainScreen::save_layout_to_config(Ref<ConfigFile> p_config_file, cons
 
 void EditorMainScreen::load_layout_from_config(Ref<ConfigFile> p_config_file, const String &p_section) {
 	int selected_main_editor_idx = p_config_file->get_value(p_section, "selected_main_editor_idx", -1);
-	if (selected_main_editor_idx >= 0 && selected_main_editor_idx < buttons.size()) {
+	if (buttons.has(selected_main_editor_idx)) {
 		callable_mp(this, &EditorMainScreen::select).call_deferred(selected_main_editor_idx);
 	}
 }
 
 void EditorMainScreen::set_button_enabled(int p_index, bool p_enabled) {
-	ERR_FAIL_INDEX(p_index, buttons.size());
+	ERR_FAIL_COND(!buttons.has(p_index));
 	buttons[p_index]->set_visible(p_enabled);
 	if (!p_enabled && buttons[p_index]->is_pressed()) {
 		select(EDITOR_2D);
@@ -110,14 +110,14 @@ void EditorMainScreen::set_button_enabled(int p_index, bool p_enabled) {
 }
 
 bool EditorMainScreen::is_button_enabled(int p_index) const {
-	ERR_FAIL_INDEX_V(p_index, buttons.size(), false);
+	ERR_FAIL_COND_V(!buttons.has(p_index), false);
 	return buttons[p_index]->is_visible();
 }
 
 int EditorMainScreen::_get_current_main_editor() const {
-	for (int i = 0; i < editor_table.size(); i++) {
-		if (editor_table[i] == selected_plugin) {
-			return i;
+	for (const KeyValue<int, EditorPlugin *> &E : editor_table) {
+		if (E.value == selected_plugin) {
+			return E.key;
 		}
 	}
 
@@ -125,39 +125,39 @@ int EditorMainScreen::_get_current_main_editor() const {
 }
 
 void EditorMainScreen::select_next() {
-	int editor = _get_current_main_editor();
+	HashMap<int, Button *>::Iterator E = buttons.find(_get_current_main_editor());
 
 	do {
-		if (editor == editor_table.size() - 1) {
-			editor = 0;
+		if (!E || E == buttons.last()) {
+			E = buttons.begin();
 		} else {
-			editor++;
+			++E;
 		}
-	} while (!buttons[editor]->is_visible());
+	} while (!E->value->is_visible());
 
-	select(editor);
+	select(E->key);
 }
 
 void EditorMainScreen::select_prev() {
-	int editor = _get_current_main_editor();
+	HashMap<int, Button *>:: Iterator E = buttons.find(_get_current_main_editor());
 
 	do {
-		if (editor == 0) {
-			editor = editor_table.size() - 1;
+		if (!E || E == buttons.begin()) {
+			E = buttons.last();
 		} else {
-			editor--;
+			--E;
 		}
-	} while (!buttons[editor]->is_visible());
+	} while (!E->value->is_visible());
 
-	select(editor);
+	select(E->key);
 }
 
 void EditorMainScreen::select_by_name(const String &p_name) {
 	ERR_FAIL_COND(p_name.is_empty());
 
-	for (int i = 0; i < buttons.size(); i++) {
-		if (buttons[i]->get_text() == p_name) {
-			select(i);
+	for (const KeyValue<int, Button *> &E : buttons) {
+		if (E.value->get_text() == p_name) {
+			select(E.key);
 			return;
 		}
 	}
@@ -170,14 +170,15 @@ void EditorMainScreen::select(int p_index) {
 		return;
 	}
 
-	ERR_FAIL_INDEX(p_index, editor_table.size());
+	ERR_FAIL_COND(!buttons.has(p_index));
+	ERR_FAIL_COND(!editor_table.has(p_index));
 
 	if (!buttons[p_index]->is_visible()) { // Button hidden, no editor.
 		return;
 	}
 
-	for (int i = 0; i < buttons.size(); i++) {
-		buttons[i]->set_pressed_no_signal(i == p_index);
+	for (const KeyValue<int, Button *> &E : buttons) {
+		E.value->set_pressed_no_signal(E.key == p_index);
 	}
 
 	EditorPlugin *new_editor = editor_table[p_index];
@@ -205,9 +206,9 @@ void EditorMainScreen::select(int p_index) {
 }
 
 int EditorMainScreen::get_selected_index() const {
-	for (int i = 0; i < editor_table.size(); i++) {
-		if (selected_plugin == editor_table[i]) {
-			return i;
+	for (const KeyValue<int, EditorPlugin *> &E : editor_table) {
+		if (selected_plugin == E.value) {
+			return E.key;
 		}
 	}
 	return -1;
@@ -215,9 +216,9 @@ int EditorMainScreen::get_selected_index() const {
 
 int EditorMainScreen::get_plugin_index(EditorPlugin *p_editor) const {
 	int screen = -1;
-	for (int i = 0; i < editor_table.size(); i++) {
-		if (p_editor == editor_table[i]) {
-			screen = i;
+	for (const KeyValue<int, EditorPlugin *> &E : editor_table) {
+		if (p_editor == E.value) {
+			screen = E.key;
 			break;
 		}
 	}
@@ -249,37 +250,41 @@ void EditorMainScreen::add_main_plugin(EditorPlugin *p_editor) {
 		icon->connect_changed(callable_mp((Control *)tb, &Control::update_minimum_size));
 	}
 
-	tb->connect(SceneStringName(pressed), callable_mp(this, &EditorMainScreen::select).bind(buttons.size()));
+	int main_screen_index = p_editor->get_main_screen_index();
+	if (main_screen_index == -1) {
+		// Get the next largest index
+		int candidate_index = EDITOR_MAX;
+		for (const KeyValue<int, Button *> &E : buttons) {
+			candidate_index = MAX(candidate_index, E.key + 1);
+		}
+		main_screen_index = candidate_index;
+	}
 
-	buttons.push_back(tb);
+	tb->connect(SceneStringName(pressed), callable_mp(this, &EditorMainScreen::select).bind(main_screen_index));
+
+	buttons.insert(main_screen_index, tb);
 	button_hb->add_child(tb);
-	editor_table.push_back(p_editor);
+	editor_table.insert(main_screen_index, p_editor);
 }
 
 void EditorMainScreen::remove_main_plugin(EditorPlugin *p_editor) {
-	// Remove the main editor button and update the bindings of
-	// all buttons behind it to point to the correct main window.
-	for (int i = buttons.size() - 1; i >= 0; i--) {
-		if (p_editor->get_plugin_name() == buttons[i]->get_text()) {
-			if (buttons[i]->is_pressed()) {
-				select(EDITOR_SCRIPT);
-			}
+	int plugin_index = get_plugin_index(p_editor);
+	ERR_FAIL_COND(plugin_index == -1);
+	ERR_FAIL_COND(!buttons.has(plugin_index));
+	ERR_FAIL_COND(!editor_table.has(plugin_index));
 
-			memdelete(buttons[i]);
-			buttons.remove_at(i);
-
-			break;
-		} else {
-			buttons[i]->disconnect(SceneStringName(pressed), callable_mp(this, &EditorMainScreen::select));
-			buttons[i]->connect(SceneStringName(pressed), callable_mp(this, &EditorMainScreen::select).bind(i - 1));
-		}
+	if (buttons[plugin_index]->is_pressed()) {
+		select(EDITOR_SCRIPT);
 	}
+
+	memdelete(buttons[plugin_index]);
+	buttons.erase(plugin_index);
 
 	if (selected_plugin == p_editor) {
 		selected_plugin = nullptr;
 	}
 
-	editor_table.erase(p_editor);
+	editor_table.erase(plugin_index);
 }
 
 EditorMainScreen::EditorMainScreen() {

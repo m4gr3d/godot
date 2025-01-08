@@ -31,6 +31,7 @@
 #ifndef GAME_VIEW_PLUGIN_H
 #define GAME_VIEW_PLUGIN_H
 
+#include "editor/editor_main_screen.h"
 #include "editor/debugger/editor_debugger_node.h"
 #include "editor/plugins/editor_debugger_plugin.h"
 #include "editor/plugins/editor_plugin.h"
@@ -226,6 +227,7 @@ protected:
 public:
 	virtual String get_plugin_name() const override { return "Game"; }
 	bool has_main_screen() const override { return true; }
+	int get_main_screen_index() const override { return EditorMainScreen::EditorTable::EDITOR_GAME; }
 	virtual void edit(Object *p_object) override {}
 	virtual bool handles(Object *p_object) const override { return false; }
 	virtual void make_visible(bool p_visible) override;

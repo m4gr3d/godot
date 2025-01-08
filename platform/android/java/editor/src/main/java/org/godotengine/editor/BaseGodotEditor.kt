@@ -45,12 +45,15 @@ import android.widget.Toast
 import androidx.annotation.CallSuper
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.window.layout.WindowMetricsCalculator
+import org.godotengine.editor.embed.EmbeddedGameFragment
+import org.godotengine.editor.embed.GameMenuFragment
 import org.godotengine.editor.utils.signApk
 import org.godotengine.editor.utils.verifyApk
 import org.godotengine.godot.BuildConfig
 import org.godotengine.godot.GodotActivity
 import org.godotengine.godot.GodotLib
 import org.godotengine.godot.error.Error
+import org.godotengine.godot.utils.GameMenuUtils
 import org.godotengine.godot.utils.PermissionsUtil
 import org.godotengine.godot.utils.ProcessPhoenix
 import org.godotengine.godot.utils.isNativeXRDevice
@@ -64,7 +67,7 @@ import kotlin.math.min
  * Each derived activity runs in its own process, which enable up to have several instances of
  * the Godot engine up and running at the same time.
  */
-abstract class BaseGodotEditor : GodotActivity() {
+abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListener {
 
 	companion object {
 		private val TAG = BaseGodotEditor::class.java.simpleName
@@ -125,10 +128,27 @@ abstract class BaseGodotEditor : GodotActivity() {
 		private const val PLAY_WINDOW_PIP_DISABLED = 0
 		private const val PLAY_WINDOW_PIP_ENABLED = 1
 		private const val PLAY_WINDOW_PIP_ENABLED_FOR_SAME_AS_EDITOR = 2
+
+		// Game menu constants
+		internal const val KEY_GAME_MENU_ACTION = "key_game_menu_action"
+		internal const val KEY_GAME_MENU_ACTION_PARAM1 = "key_game_menu_action_param1"
+
+		internal const val GAME_MENU_ACTION_SET_SUSPEND = "setSuspend"
+		internal const val GAME_MENU_ACTION_NEXT_FRAME = "nextFrame"
+		internal const val GAME_MENU_ACTION_SET_NODE_TYPE = "setNodeType"
+		internal const val GAME_MENU_ACTION_SET_SELECT_MODE = "setSelectMode"
+		internal const val GAME_MENU_ACTION_SET_SELECTION_VISIBLE = "setSelectionVisible"
+		internal const val GAME_MENU_ACTION_SET_CAMERA_OVERRIDE = "setCameraOverride"
+		internal const val GAME_MENU_ACTION_SET_CAMERA_MANIPULATE_MODE = "setCameraManipulateMode"
+		internal const val GAME_MENU_ACTION_RESET_CAMERA_2D_POSITION = "resetCamera2DPosition"
+		internal const val GAME_MENU_ACTION_RESET_CAMERA_3D_POSITION = "resetCamera3DPosition"
+
 	}
 
-	private val editorMessageDispatcher = EditorMessageDispatcher(this)
+	internal val editorMessageDispatcher = EditorMessageDispatcher(this)
 	private val editorLoadingIndicator: View? by lazy { findViewById(R.id.editor_loading_indicator) }
+
+	private var embeddedGameFragment: EmbeddedGameFragment? = null
 
 	override fun getGodotAppLayout() = R.layout.godot_editor_layout
 
@@ -187,6 +207,30 @@ abstract class BaseGodotEditor : GodotActivity() {
 		}
 
 		super.onCreate(savedInstanceState)
+
+		// Embedding the game window is only supported in the editor window.
+		if (getEditorWindowInfo() == EDITOR_MAIN_INFO) {
+			findViewById<View?>(R.id.godot_embedded_game_container)?.let {
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+					val embeddedFragment =
+						supportFragmentManager.findFragmentById(R.id.godot_embedded_game_container)
+					if (embeddedFragment is EmbeddedGameFragment) {
+						Log.v(TAG, "Reusing existing embedded game fragment instance.")
+						embeddedGameFragment = embeddedFragment
+					} else {
+						Log.v(TAG, "Creating new embedded game fragment instance.")
+						embeddedGameFragment = EmbeddedGameFragment()
+						supportFragmentManager.beginTransaction()
+							.replace(
+								R.id.godot_embedded_game_container,
+								embeddedGameFragment!!,
+								EmbeddedGameFragment.TAG
+							)
+							.commitNowAllowingStateLoss()
+					}
+				}
+			}
+		}
 	}
 
 	override fun onGodotSetupCompleted() {
@@ -308,10 +352,17 @@ abstract class BaseGodotEditor : GodotActivity() {
 		return newInstance
 	}
 
-	override fun onNewGodotInstanceRequested(args: Array<String>): Int {
+	final override fun onNewGodotInstanceRequested(args: Array<String>): Int {
 		val editorWindowInfo = retrieveEditorWindowInfo(args)
+		val shouldRunGameEmbedded = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+			embeddedGameFragment != null &&
+			false // TODO: Add logic behind it
+		if (editorWindowInfo == RUN_GAME_INFO && shouldRunGameEmbedded) {
+			embeddedGameFragment?.startEmbeddedGame(args)
+			return EmbeddedGameFragment.WINDOW_ID
+		}
 
-		// Launch a new activity
+		// We're not running embedded so launch a new activity
 		val sourceView = godotFragment?.view
 		val activityOptions = if (sourceView == null) {
 			null
@@ -335,6 +386,11 @@ abstract class BaseGodotEditor : GodotActivity() {
 	}
 
 	final override fun onGodotForceQuit(godotInstanceId: Int): Boolean {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && godotInstanceId == EmbeddedGameFragment.WINDOW_ID) {
+			embeddedGameFragment?.stopEmbeddedGame()
+			return true
+		}
+
 		val editorWindowInfo = getEditorWindowInfoForInstanceId(godotInstanceId) ?: return super.onGodotForceQuit(godotInstanceId)
 
 		if (editorWindowInfo.windowClassName == javaClass.name) {
@@ -344,7 +400,7 @@ abstract class BaseGodotEditor : GodotActivity() {
 		}
 
 		// Send an inter-process message to request the target editor window to force quit.
-		if (editorMessageDispatcher.requestForceQuit(editorWindowInfo.windowId)) {
+		if (editorMessageDispatcher.requestForceQuit(editorWindowInfo)) {
 			return true
 		}
 
@@ -558,4 +614,109 @@ abstract class BaseGodotEditor : GodotActivity() {
 
         return false
     }
+
+	internal fun parseGameMenuAction(actionData: Bundle) {
+		val action = actionData.getString(KEY_GAME_MENU_ACTION) ?: return
+		when (action) {
+			GAME_MENU_ACTION_SET_SUSPEND -> {
+				val suspended = actionData.getBoolean(KEY_GAME_MENU_ACTION_PARAM1)
+				suspendGame(suspended)
+			}
+			GAME_MENU_ACTION_NEXT_FRAME -> {
+				dispatchNextFrame()
+			}
+			GAME_MENU_ACTION_SET_NODE_TYPE -> {
+				val nodeType = actionData.getInt(KEY_GAME_MENU_ACTION_PARAM1)
+				selectRuntimeNode(nodeType)
+			}
+			GAME_MENU_ACTION_SET_SELECTION_VISIBLE -> {
+				val enabled = actionData.getBoolean(KEY_GAME_MENU_ACTION_PARAM1)
+				toggleSelectionVisibility(enabled)
+			}
+			GAME_MENU_ACTION_SET_CAMERA_OVERRIDE -> {
+				val enabled = actionData.getBoolean(KEY_GAME_MENU_ACTION_PARAM1)
+				overrideCamera(enabled)
+			}
+			GAME_MENU_ACTION_SET_SELECT_MODE -> {
+				val selectMode = actionData.getInt(KEY_GAME_MENU_ACTION_PARAM1)
+				selectRuntimeNodeSelectMode(selectMode)
+			}
+			GAME_MENU_ACTION_RESET_CAMERA_2D_POSITION -> {
+				reset2DCamera()
+			}
+			GAME_MENU_ACTION_RESET_CAMERA_3D_POSITION -> {
+				reset3DCamera()
+			}
+			GAME_MENU_ACTION_SET_CAMERA_MANIPULATE_MODE -> {
+				val mode = actionData.getInt(KEY_GAME_MENU_ACTION_PARAM1)
+				manipulateCamera(mode)
+			}
+		}
+	}
+
+	override fun suspendGame(suspended: Boolean) {
+		godot?.runOnRenderThread {
+			GameMenuUtils.setSuspend(suspended)
+		}
+	}
+
+	override fun dispatchNextFrame() {
+		godot?.runOnRenderThread {
+			GameMenuUtils.nextFrame()
+		}
+	}
+
+	override fun toggleSelectionVisibility(enabled: Boolean) {
+		godot?.runOnRenderThread {
+			GameMenuUtils.setSelectionVisible(enabled)
+		}
+	}
+
+	override fun overrideCamera(enabled: Boolean) {
+		godot?.runOnRenderThread {
+			GameMenuUtils.setCameraOverride(enabled)
+		}
+	}
+
+	override fun selectRuntimeNode(nodeType: GameMenuFragment.GameMenuListener.RuntimeNodeType) {
+		selectRuntimeNode(nodeType.ordinal)
+	}
+
+	private fun selectRuntimeNode(nodeType: Int) {
+		godot?.runOnRenderThread {
+			GameMenuUtils.setNodeType(nodeType)
+		}
+	}
+
+	override fun selectRuntimeNodeSelectMode(selectMode: GameMenuFragment.GameMenuListener.RuntimeNodeSelectMode) {
+		selectRuntimeNodeSelectMode(selectMode.ordinal)
+	}
+
+	private fun selectRuntimeNodeSelectMode(selectMode: Int) {
+		godot?.runOnRenderThread {
+			GameMenuUtils.setSelectMode(selectMode)
+		}
+	}
+
+	override fun reset2DCamera() {
+		godot?.runOnRenderThread {
+			GameMenuUtils.resetCamera2DPosition()
+		}
+	}
+
+	override fun reset3DCamera() {
+		godot?.runOnRenderThread {
+			GameMenuUtils.resetCamera3DPosition()
+		}
+	}
+
+	override fun manipulateCamera(mode: GameMenuFragment.GameMenuListener.CameraMode) {
+		manipulateCamera(mode.ordinal)
+	}
+
+	private fun manipulateCamera(mode: Int) {
+		godot?.runOnRenderThread {
+			GameMenuUtils.setCameraManipulateMode(mode)
+		}
+	}
 }

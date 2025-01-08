@@ -73,6 +73,11 @@ internal class EditorMessageDispatcher(private val editor: BaseGodotEditor) {
 		 * Requests the recipient to store the passed [android.os.Messenger] instance.
 		 */
 		private const val MSG_REGISTER_MESSENGER = 1
+
+		/**
+		 * Requests the recipient to dispatch the given game menu action.
+		 */
+		private const val MSG_DISPATCH_GAME_MENU_ACTION = 2
 	}
 
 	private val recipientsMessengers = ConcurrentHashMap<Int, Messenger>()
@@ -89,15 +94,23 @@ internal class EditorMessageDispatcher(private val editor: BaseGodotEditor) {
 					registerMessenger(editorId, messenger)
 				}
 
+				MSG_DISPATCH_GAME_MENU_ACTION -> {
+					val actionData = msg.data
+					if (actionData != null) {
+						editor.parseGameMenuAction(actionData)
+					}
+				}
+
 				else -> super.handleMessage(msg)
 			}
 		}
 	}
 
 	/**
-	 * Request the window with the given [editorId] to force quit.
+	 * Request the window with the given [editorWindow] to force quit.
 	 */
-	fun requestForceQuit(editorId: Int): Boolean {
+	fun requestForceQuit(editorWindow: EditorWindowInfo): Boolean {
+		val editorId = editorWindow.windowId
 		val messenger = recipientsMessengers[editorId] ?: return false
 		return try {
 			Log.v(TAG, "Requesting 'forceQuit' for $editorId")
@@ -108,6 +121,24 @@ internal class EditorMessageDispatcher(private val editor: BaseGodotEditor) {
 			Log.e(TAG, "Error requesting 'forceQuit' to $editorId", e)
 			recipientsMessengers.remove(editorId)
 			false
+		}
+	}
+
+	/**
+	 * Dispatch a game menu action to another editor instance.
+	 */
+	fun dispatchGameMenuAction(editorWindow: EditorWindowInfo, actionData: Bundle) {
+		val editorId = editorWindow.windowId
+		val messenger = recipientsMessengers[editorId] ?: return
+		try {
+			Log.d(TAG, "Dispatch game menu action to $editorId")
+			val msg = Message.obtain(null, MSG_DISPATCH_GAME_MENU_ACTION).apply {
+				data = actionData
+			}
+			messenger.send(msg)
+		} catch (e: RemoteException) {
+			Log.e(TAG, "Error dispatching game menu action to $editorId", e)
+			recipientsMessengers.remove(editorId)
 		}
 	}
 

@@ -123,6 +123,7 @@
 		</constant>
 		<constant name="FEATURE_GAME" value="8" enum="Feature">
 			The Game tab, which allows embedding the game window and selecting nodes by clicking inside of it. If this feature is disabled, the Game tab won't display.
+			[b]Note:[/b] The feature is disabled on the Android and XR Editor as the capability is provided by another UX.
 		</constant>
 		<constant name="FEATURE_MAX" value="9" enum="Feature">
 			Represents the size of the [enum Feature] enum.

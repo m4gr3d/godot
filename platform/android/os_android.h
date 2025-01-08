@@ -37,6 +37,7 @@
 #include "drivers/unix/os_unix.h"
 #include "servers/audio_server.h"
 
+class GameViewDebugger;
 class GodotJavaWrapper;
 class GodotIOJavaWrapper;
 
@@ -81,6 +82,10 @@ private:
 	mutable HashSet<String> font_names;
 	mutable bool font_config_loaded = false;
 
+#ifdef TOOLS_ENABLED
+	Ref<GameViewDebugger> game_view_debugger;
+#endif
+
 	GodotJavaWrapper *godot_java = nullptr;
 	GodotIOJavaWrapper *godot_io_java = nullptr;
 
@@ -95,6 +100,8 @@ public:
 #ifdef TOOLS_ENABLED
 	Error sign_apk(const String &p_input_path, const String &p_output_path, const String &p_keystore_path, const String &p_keystore_user, const String &p_keystore_password);
 	Error verify_apk(const String &p_apk_path);
+
+	Ref<GameViewDebugger> get_game_view_debugger();
 #endif
 
 	virtual void initialize_core() override;

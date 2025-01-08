@@ -32,6 +32,7 @@
 #define NODE_3D_EDITOR_PLUGIN_H
 
 #include "core/math/dynamic_bvh.h"
+#include "editor/editor_main_screen.h"
 #include "editor/plugins/editor_plugin.h"
 #include "editor/plugins/node_3d_editor_gizmos.h"
 #include "editor/themes/editor_scale.h"
@@ -1016,6 +1017,7 @@ public:
 	Node3DEditor *get_spatial_editor() { return spatial_editor; }
 	virtual String get_plugin_name() const override { return "3D"; }
 	bool has_main_screen() const override { return true; }
+	int get_main_screen_index() const override { return EditorMainScreen::EditorTable::EDITOR_3D; }
 	virtual void make_visible(bool p_visible) override;
 	virtual void edit(Object *p_object) override;
 	virtual bool handles(Object *p_object) const override;

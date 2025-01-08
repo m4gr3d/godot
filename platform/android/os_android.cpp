@@ -43,6 +43,9 @@
 #include "core/io/xml_parser.h"
 #include "drivers/unix/dir_access_unix.h"
 #include "drivers/unix/file_access_unix.h"
+#ifdef TOOLS_ENABLED
+#include "editor/plugins/game_view_plugin.h"
+#endif
 #include "main/main.h"
 #include "scene/main/scene_tree.h"
 #include "servers/rendering_server.h"
@@ -140,6 +143,10 @@ void OS_Android::finalize() {
 
 OS_Android *OS_Android::get_singleton() {
 	return static_cast<OS_Android *>(OS::get_singleton());
+}
+
+Ref<GameViewDebugger> OS_Android::get_game_view_debugger() {
+	return game_view_debugger;
 }
 
 GodotJavaWrapper *OS_Android::get_godot_java() {
@@ -331,6 +338,14 @@ void OS_Android::main_loop_begin() {
 	if (main_loop) {
 		main_loop->initialize();
 	}
+
+#ifdef TOOLS_ENABLED
+	if (Engine::get_singleton()->is_editor_hint()) {
+		game_view_debugger.instantiate();
+		game_view_debugger->set_is_feature_enabled(true);
+		EditorDebuggerNode::get_singleton()->add_debugger_plugin(game_view_debugger);
+	}
+#endif
 }
 
 bool OS_Android::main_loop_iterate(bool *r_should_swap_buffers) {
@@ -353,6 +368,12 @@ bool OS_Android::main_loop_iterate(bool *r_should_swap_buffers) {
 }
 
 void OS_Android::main_loop_end() {
+#ifdef TOOLS_ENABLED
+	if (Engine::get_singleton()->is_editor_hint()) {
+		EditorDebuggerNode::get_singleton()->remove_debugger_plugin(game_view_debugger);
+	}
+#endif
+
 	if (main_loop) {
 		SceneTree *scene_tree = Object::cast_to<SceneTree>(main_loop);
 		if (scene_tree) {

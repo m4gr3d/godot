@@ -49,6 +49,7 @@ public:
 		EDITOR_SCRIPT,
 		EDITOR_GAME,
 		EDITOR_ASSETLIB,
+		EDITOR_MAX
 	};
 
 private:
@@ -56,8 +57,8 @@ private:
 	EditorPlugin *selected_plugin = nullptr;
 
 	HBoxContainer *button_hb = nullptr;
-	Vector<Button *> buttons;
-	Vector<EditorPlugin *> editor_table;
+	HashMap<int, Button *> buttons;
+	HashMap<int, EditorPlugin *> editor_table;
 
 	int _get_current_main_editor() const;
 

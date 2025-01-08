@@ -186,6 +186,7 @@ public:
 	virtual String get_plugin_version() const;
 	virtual void set_plugin_version(const String &p_version);
 	virtual bool has_main_screen() const;
+	virtual int get_main_screen_index() const { return -1; }
 	virtual void make_visible(bool p_visible);
 	virtual void selected_notify() {} //notify that it was raised by the user, not the editor
 	virtual void edit(Object *p_object);

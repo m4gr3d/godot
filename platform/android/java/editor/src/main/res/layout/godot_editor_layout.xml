@@ -3,12 +3,24 @@
 	xmlns:android="http://schemas.android.com/apk/res/android"
 	android:layout_width="match_parent"
 	android:layout_height="match_parent"
+	android:background="@android:color/black"
 	xmlns:app="http://schemas.android.com/apk/res-auto">
 
 	<FrameLayout
 		android:id="@+id/godot_fragment_container"
 		android:layout_width="match_parent"
-		android:layout_height="match_parent" />
+		android:layout_height="match_parent"/>
+
+	<FrameLayout
+		android:id="@+id/godot_embedded_game_container"
+		android:layout_width="900dp"
+		android:layout_height="450dp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent"
+		app:layout_constraintBottom_toBottomOf="parent"
+		android:visibility="gone"/>
+
 
 	<ProgressBar
 		style="@android:style/Widget.Holo.ProgressBar.Large"

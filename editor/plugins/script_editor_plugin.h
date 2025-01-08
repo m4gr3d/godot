@@ -32,6 +32,7 @@
 #define SCRIPT_EDITOR_PLUGIN_H
 
 #include "core/object/script_language.h"
+#include "editor/editor_main_screen.h"
 #include "editor/plugins/editor_plugin.h"
 #include "scene/gui/dialogs.h"
 #include "scene/gui/panel_container.h"
@@ -624,6 +625,7 @@ protected:
 public:
 	virtual String get_plugin_name() const override { return "Script"; }
 	bool has_main_screen() const override { return true; }
+	int get_main_screen_index() const override { return EditorMainScreen::EditorTable::EDITOR_SCRIPT; }
 	virtual void edit(Object *p_object) override;
 	virtual bool handles(Object *p_object) const override;
 	virtual void make_visible(bool p_visible) override;

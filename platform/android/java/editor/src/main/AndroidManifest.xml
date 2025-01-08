@@ -83,6 +83,14 @@
             android:resizeableActivity="false"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
         </activity>
+
+        <service
+            android:name=".embed.EmbeddedGameService"
+            android:label="@string/godot_embedded_game_service_name"
+            android:process=":EmbeddedGame"
+            android:description="@string/godot_embedded_game_service_description"
+            android:exported="false"
+            android:icon="@mipmap/ic_play_window"/>
     </application>
 
 </manifest>
