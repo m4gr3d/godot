@@ -98,6 +98,10 @@
             android:resizeableActivity="false"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
         </activity>
+
+        <service android:name="org.godotengine.godot.service.GodotService"
+            android:process=":RemoteGodotService"
+            android:exported="false"/>
     </application>
 
 </manifest>

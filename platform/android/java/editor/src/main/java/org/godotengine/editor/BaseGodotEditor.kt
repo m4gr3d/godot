@@ -61,6 +61,7 @@ import org.godotengine.godot.BuildConfig
 import org.godotengine.godot.GodotActivity
 import org.godotengine.godot.GodotLib
 import org.godotengine.godot.error.Error
+import org.godotengine.godot.service.RemoteGodotFragment
 import org.godotengine.godot.utils.DialogUtils
 import org.godotengine.godot.utils.GameMenuUtils
 import org.godotengine.godot.utils.GameMenuUtils.GameEmbedMode
@@ -174,6 +175,7 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 		findViewById(R.id.game_menu_fragment_container)
 	}
 	protected var gameMenuFragment: GameMenuFragment? = null
+	private var embeddedGameFragment: RemoteGodotFragment? = null
 	protected val gameMenuState = Bundle()
 
 	override fun getGodotAppLayout() = R.layout.godot_editor_layout
@@ -233,6 +235,16 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 		}
 
 		super.onCreate(savedInstanceState)
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && embeddedGameViewContainerWindow != null) {
+			var currentGameFragment = supportFragmentManager.findFragmentById(R.id.embedded_game_fragment_container)
+			if (currentGameFragment !is RemoteGodotFragment) {
+				currentGameFragment = RemoteGodotFragment()
+				supportFragmentManager.beginTransaction()
+					.replace(R.id.embedded_game_fragment_container, currentGameFragment).commitNowAllowingStateLoss()
+			}
+			embeddedGameFragment = currentGameFragment
+		}
 
 		// Add the game menu bar.
 		setupGameMenuBar()
@@ -405,6 +417,14 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 			return editorWindowInfo.windowId
 		}
 
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && embeddedGameFragment != null && editorWindowInfo == EMBEDDED_RUN_GAME_INFO) {
+			runOnUiThread {
+				embeddedGameViewContainerWindow?.isVisible = true
+				embeddedGameFragment?.startRemoteGame(args)
+			}
+			return editorWindowInfo.windowId
+		}
+
 		val sourceView = godotFragment?.view
 		val activityOptions = if (sourceView == null) {
 			null
@@ -435,6 +455,13 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 
 	final override fun onGodotForceQuit(godotInstanceId: Int): Boolean {
 		val editorWindowInfo = getEditorWindowInfoForInstanceId(godotInstanceId) ?: return super.onGodotForceQuit(godotInstanceId)
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && embeddedGameFragment != null && editorWindowInfo == EMBEDDED_RUN_GAME_INFO) {
+			runOnUiThread {
+				embeddedGameViewContainerWindow?.isVisible = false
+				embeddedGameFragment?.stopRemoteGame()
+			}
+		}
 
 		if (editorWindowInfo.windowClassName == javaClass.name) {
 			Log.d(TAG, "Force quitting ${editorWindowInfo.windowClassName}")
