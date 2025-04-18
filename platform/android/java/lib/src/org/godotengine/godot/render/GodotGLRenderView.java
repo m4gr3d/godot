@@ -28,18 +28,12 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-package org.godotengine.godot;
+package org.godotengine.godot.render;
 
-import org.godotengine.godot.gl.GLSurfaceView;
-import org.godotengine.godot.gl.GodotRenderer;
+import org.godotengine.godot.Godot;
+import org.godotengine.godot.GodotRenderView;
 import org.godotengine.godot.input.GodotInputHandler;
 import org.godotengine.godot.xr.XRMode;
-import org.godotengine.godot.xr.ovr.OvrConfigChooser;
-import org.godotengine.godot.xr.ovr.OvrContextFactory;
-import org.godotengine.godot.xr.ovr.OvrWindowSurfaceFactory;
-import org.godotengine.godot.xr.regular.RegularConfigChooser;
-import org.godotengine.godot.xr.regular.RegularContextFactory;
-import org.godotengine.godot.xr.regular.RegularFallbackConfigChooser;
 
 import android.annotation.SuppressLint;
 import android.content.res.AssetManager;
@@ -76,18 +70,18 @@ import java.io.InputStream;
  *   that matches it exactly (with regards to red/green/blue/alpha channels
  *   bit depths). Failure to do so would result in an EGL_BAD_MATCH error.
  */
-class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
+public class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 	private final Godot godot;
 	private final GodotInputHandler inputHandler;
 	private final GodotRenderer godotRenderer;
 	private final SparseArray<PointerIcon> customPointerIcons = new SparseArray<>();
 
-	public GodotGLRenderView(Godot godot, GodotInputHandler inputHandler, XRMode xrMode, boolean useDebugOpengl) {
+	public GodotGLRenderView(Godot godot, GodotRenderer renderer, GodotInputHandler inputHandler, XRMode xrMode, boolean useDebugOpengl) {
 		super(godot.getContext());
 
 		this.godot = godot;
 		this.inputHandler = inputHandler;
-		this.godotRenderer = new GodotRenderer();
+		this.godotRenderer = renderer;
 		setPointerIcon(PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_DEFAULT));
 		init(xrMode, false, useDebugOpengl);
 	}
@@ -95,44 +89,6 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 	@Override
 	public SurfaceView getView() {
 		return this;
-	}
-
-	@Override
-	public void queueOnRenderThread(Runnable event) {
-		queueEvent(event);
-	}
-
-	@Override
-	public void onActivityPaused() {
-		queueEvent(() -> {
-			GodotLib.focusout();
-			// Pause the renderer
-			godotRenderer.onActivityPaused();
-		});
-	}
-
-	@Override
-	public void onActivityStopped() {
-		pauseGLThread();
-	}
-
-	@Override
-	public void onActivityResumed() {
-		queueEvent(() -> {
-			// Resume the renderer
-			godotRenderer.onActivityResumed();
-			GodotLib.focusin();
-		});
-	}
-
-	@Override
-	public void onActivityStarted() {
-		resumeGLThread();
-	}
-
-	@Override
-	public void onActivityDestroyed() {
-		requestRenderThreadExitAndWait();
 	}
 
 	@Override

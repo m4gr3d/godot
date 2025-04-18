@@ -28,11 +28,11 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-package org.godotengine.godot;
+package org.godotengine.godot.render;
 
+import org.godotengine.godot.Godot;
+import org.godotengine.godot.GodotRenderView;
 import org.godotengine.godot.input.GodotInputHandler;
-import org.godotengine.godot.vulkan.VkRenderer;
-import org.godotengine.godot.vulkan.VkSurfaceView;
 
 import android.annotation.SuppressLint;
 import android.content.res.AssetManager;
@@ -50,18 +50,18 @@ import androidx.annotation.Keep;
 
 import java.io.InputStream;
 
-class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderView {
+public class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderView {
 	private final Godot godot;
 	private final GodotInputHandler mInputHandler;
-	private final VkRenderer mRenderer;
+	private final GodotRenderer mRenderer;
 	private final SparseArray<PointerIcon> customPointerIcons = new SparseArray<>();
 
-	public GodotVulkanRenderView(Godot godot, GodotInputHandler inputHandler) {
+	public GodotVulkanRenderView(Godot godot, GodotRenderer renderer, GodotInputHandler inputHandler) {
 		super(godot.getContext());
 
 		this.godot = godot;
 		mInputHandler = inputHandler;
-		mRenderer = new VkRenderer();
+		mRenderer = renderer;
 		setPointerIcon(PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_DEFAULT));
 		setFocusableInTouchMode(true);
 		setClickable(false);
@@ -75,44 +75,6 @@ class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderView {
 	@Override
 	public SurfaceView getView() {
 		return this;
-	}
-
-	@Override
-	public void queueOnRenderThread(Runnable event) {
-		queueOnVkThread(event);
-	}
-
-	@Override
-	public void onActivityPaused() {
-		queueOnVkThread(() -> {
-			GodotLib.focusout();
-			// Pause the renderer
-			mRenderer.onVkPause();
-		});
-	}
-
-	@Override
-	public void onActivityStopped() {
-		pauseRenderThread();
-	}
-
-	@Override
-	public void onActivityStarted() {
-		resumeRenderThread();
-	}
-
-	@Override
-	public void onActivityResumed() {
-		queueOnVkThread(() -> {
-			// Resume the renderer
-			mRenderer.onVkResume();
-			GodotLib.focusin();
-		});
-	}
-
-	@Override
-	public void onActivityDestroyed() {
-		requestRenderThreadExitAndWait();
 	}
 
 	@Override
