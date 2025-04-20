@@ -87,7 +87,7 @@ if lib_arch_dir != "":
     )
     env_android.Command(out_dir + "/libc++_shared.so", stl_lib_path, Copy("$TARGET", "$SOURCE"))
 
-    def generate_apk(target, source, env):
+    def generate_android_binaries(target, source, env):
         gradle_process = []
 
         if sys.platform.startswith("win"):
@@ -104,7 +104,7 @@ if lib_arch_dir != "":
             "--quiet",
         ]
 
-        if env["debug_symbols"]:
+        if env["do_not_strip_android_so"]:
             gradle_process += ["-PdoNotStrip=true"]
 
         subprocess.run(
@@ -112,7 +112,7 @@ if lib_arch_dir != "":
             cwd="platform/android/java",
         )
 
-    if env["generate_apk"]:
-        generate_apk_command = env_android.Command("generate_apk", [], generate_apk)
-        command = env_android.AlwaysBuild(generate_apk_command)
-        env_android.Depends(command, [lib])
+    if env["generate_android_binaries"]:
+        env_android.AlwaysBuild(
+            env_android.CommandNoCache("generate_android_binaries", lib, env.Run(generate_android_binaries))
+        )
