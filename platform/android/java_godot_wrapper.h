@@ -30,10 +30,11 @@
 
 #pragma once
 
-#include "java_godot_view_wrapper.h"
+#include "jni_utils.h"
 
 #include "core/math/color.h"
 #include "core/templates/list.h"
+#include "servers/display_server.h"
 
 #include <android/log.h>
 #include <jni.h>
@@ -43,8 +44,6 @@ class GodotJavaWrapper {
 private:
 	jobject godot_instance;
 	jclass godot_class;
-
-	GodotJavaViewWrapper *godot_view = nullptr;
 
 	jmethodID _restart = nullptr;
 	jmethodID _finish = nullptr;
@@ -72,7 +71,6 @@ private:
 	jmethodID _on_godot_main_loop_started = nullptr;
 	jmethodID _on_godot_terminating = nullptr;
 	jmethodID _create_new_godot_instance = nullptr;
-	jmethodID _get_render_view = nullptr;
 	jmethodID _begin_benchmark_measure = nullptr;
 	jmethodID _end_benchmark_measure = nullptr;
 	jmethodID _dump_benchmark = nullptr;
@@ -83,14 +81,27 @@ private:
 	jmethodID _is_in_immersive_mode = nullptr;
 	jmethodID _on_editor_workspace_selected = nullptr;
 	jmethodID _get_activity = nullptr;
+	jmethodID _create_sub_window = nullptr;
+	jmethodID _show_sub_window = nullptr;
+	jmethodID _delete_sub_window = nullptr;
+	jmethodID _can_capture_pointer = nullptr;
+	jmethodID _request_pointer_capture = nullptr;
+	jmethodID _release_pointer_capture = nullptr;
+	jmethodID _configure_pointer_icon = nullptr;
+	jmethodID _set_pointer_icon = nullptr;
+	jmethodID _get_sub_window_position_x = nullptr;
+	jmethodID _get_sub_window_position_y = nullptr;
+	jmethodID _set_sub_window_position = nullptr;
+	jmethodID _set_sub_window_size = nullptr;
+	jmethodID _is_window_focused = nullptr;
+	jmethodID _request_window_focus = nullptr;
+	jmethodID _set_window_transient_parent = nullptr;
 
 public:
 	GodotJavaWrapper(JNIEnv *p_env, jobject p_godot_instance);
 	~GodotJavaWrapper();
 
 	jobject get_activity();
-
-	GodotJavaViewWrapper *get_godot_view();
 
 	void on_godot_setup_completed(JNIEnv *p_env = nullptr);
 	void on_godot_main_loop_started(JNIEnv *p_env = nullptr);
@@ -138,4 +149,28 @@ public:
 	bool is_in_immersive_mode();
 
 	void on_editor_workspace_selected(const String &p_workspace);
+
+	bool create_sub_window(DisplayServer::WindowID p_sub_window_id,
+			DisplayServer::WindowMode p_sub_window_mode,
+			uint32_t p_flags,
+			const Rect2i &p_sub_window_rect,
+			bool p_exclusive,
+			DisplayServer::WindowID p_transient_parent_id);
+	void show_sub_window(DisplayServer::WindowID p_sub_window_id);
+	void delete_sub_window(DisplayServer::WindowID p_sub_window_id);
+
+	bool can_capture_pointer() const;
+	void request_pointer_capture();
+	void release_pointer_capture();
+	void configure_pointer_icon(int pointer_type, const String &image_path, const Vector2 &p_hotspot);
+	void set_pointer_icon(int pointer_type);
+
+	Point2i get_window_position(DisplayServer::WindowID p_sub_window_id);
+	void set_window_position(DisplayServer::WindowID p_sub_window_id, Point2i p_position);
+
+	void set_window_size(DisplayServer::WindowID p_sub_window_id, Size2i p_size);
+	bool is_window_focused(DisplayServer::WindowID p_window_id);
+	void request_window_focus(DisplayServer::WindowID p_window_id);
+
+	void set_window_transient_parent(DisplayServer::WindowID p_sub_window_id, DisplayServer::WindowID p_parent_id);
 };

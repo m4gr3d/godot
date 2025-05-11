@@ -32,10 +32,13 @@
 package org.godotengine.godot.render
 
 import android.util.Log
+import android.util.SparseArray
 import android.view.SurfaceHolder
 import java.lang.ref.WeakReference
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
+import androidx.core.util.isNotEmpty
+import androidx.core.util.size
 
 /**
  * Implementation of the thread used by the [GodotRenderer] to drive render logic.
@@ -48,17 +51,20 @@ internal class VkThread(private val renderer: GodotRenderer) : RenderThread(TAG)
 	}
 
 	/**
-	 * Store [Surface] related data.
+	 * Store [android.view.Surface] related data.
 	 */
-	data class SurfaceInfo(var holder: SurfaceHolder, var width: Int, var height: Int, var surfaceChanged: Boolean = true)
+	data class SurfaceInfo(val holder: SurfaceHolder, var width: Int, var height: Int, var surfaceChanged: Boolean = true, var notifySurfaceCreated: Boolean = true)
 
 	/**
 	 * Used to run events scheduled on the thread.
 	 */
 	private val eventQueue = ArrayList<Runnable>()
 
-	private var renderVkSurfaceInfo: SurfaceInfo? = null
-	private fun hasSurface() = renderVkSurfaceInfo != null
+	/**
+	 * Holds the [android.view.Surface] onto which rendering is done.
+	 */
+	private val renderVkSurfaces = SparseArray<SurfaceInfo>()
+	private fun hasSurface() = renderVkSurfaces.isNotEmpty()
 
 	/**
 	 * Used to synchronize interaction with other threads (e.g: main thread).
@@ -68,7 +74,6 @@ internal class VkThread(private val renderer: GodotRenderer) : RenderThread(TAG)
 
 	private var shouldExit = false
 	private var exited = false
-	private var rendererInitialized = false
 	private var threadResumed = false
 
 	private var renderMode = Renderer.RenderMode.CONTINUOUSLY
@@ -135,7 +140,7 @@ internal class VkThread(private val renderer: GodotRenderer) : RenderThread(TAG)
 				try {
 					Log.i(TAG, "Waiting on exit for $name")
 					lockCondition.await()
-				} catch (ex: InterruptedException) {
+				} catch (_: InterruptedException) {
 					currentThread().interrupt()
 				}
 			}
@@ -161,14 +166,14 @@ internal class VkThread(private val renderer: GodotRenderer) : RenderThread(TAG)
 		}
 	}
 
-	override fun surfaceCreated(holder: SurfaceHolder, surfaceViewWeakRef: WeakReference<GLSurfaceView>?) {
+	override fun surfaceCreated(windowId: Int, holder: SurfaceHolder, surfaceViewWeakRef: WeakReference<GLSurfaceView>?) {
 		// This is a no op because surface creation will always be followed by surfaceChanged()
 		// which provide all the needed information.
 	}
 
-	override fun surfaceChanged(holder: SurfaceHolder, width: Int, height: Int) {
+	override fun surfaceChanged(windowId: Int, holder: SurfaceHolder, width: Int, height: Int) {
 		lock.withLock {
-			val surfaceInfo = renderVkSurfaceInfo ?: SurfaceInfo(holder, width, height)
+			val surfaceInfo = renderVkSurfaces.get(windowId, SurfaceInfo(holder, width, height))
 			surfaceInfo.apply {
 				surfaceChanged = true
 				this.width = width
@@ -176,15 +181,15 @@ internal class VkThread(private val renderer: GodotRenderer) : RenderThread(TAG)
 			}
 
 			requestRender = true
-			renderVkSurfaceInfo = surfaceInfo
+			renderVkSurfaces.put(windowId, surfaceInfo)
 
 			lockCondition.signalAll()
 		}
 	}
 
-	override fun surfaceDestroyed(holder: SurfaceHolder) {
+	override fun surfaceDestroyed(windowId: Int, holder: SurfaceHolder) {
 		lock.withLock {
-			renderVkSurfaceInfo = null
+			renderVkSurfaces.delete(windowId)
 			lockCondition.signalAll()
 		}
 	}
@@ -213,17 +218,17 @@ internal class VkThread(private val renderer: GodotRenderer) : RenderThread(TAG)
 						}
 
 						if (readyToDraw()) {
-							if (!rendererInitialized) {
-								rendererInitialized = true
-								renderVkSurfaceInfo?.apply {
-									renderer.onRenderSurfaceCreated(holder.surface)
+							for (index in 0 until renderVkSurfaces.size) {
+								val surfaceId = renderVkSurfaces.keyAt(index)
+								val surfaceInfo = renderVkSurfaces.valueAt(index)
+								if (surfaceInfo.notifySurfaceCreated) {
+									renderer.onRenderSurfaceCreated(surfaceId, surfaceInfo.holder.surface)
+									surfaceInfo.notifySurfaceCreated = false
 								}
-							}
 
-							renderVkSurfaceInfo?.let {
-								if (it.surfaceChanged) {
-									renderer.onRenderSurfaceChanged(it.holder.surface, it.width, it.height)
-									it.surfaceChanged = false
+								if (surfaceInfo.surfaceChanged) {
+									renderer.onRenderSurfaceChanged(surfaceId, surfaceInfo.holder.surface, surfaceInfo.width, surfaceInfo.height)
+									surfaceInfo.surfaceChanged = false
 								}
 							}
 
@@ -241,7 +246,7 @@ internal class VkThread(private val renderer: GodotRenderer) : RenderThread(TAG)
 
 				// Run queued event.
 				if (event != null) {
-					event?.run()
+					event.run()
 					event = null
 					continue
 				}

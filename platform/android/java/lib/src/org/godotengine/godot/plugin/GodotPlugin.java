@@ -258,7 +258,7 @@ public abstract class GodotPlugin {
 	 * When using the OpenGL renderer, this is called on the GL thread after the surface is created
 	 * and whenever the OpenGL ES surface size changes.
 	 *
-	 * @deprecated Use {@link #onRenderSurfaceChanged(Surface, int, int)} instead.
+	 * @deprecated Use {@link #onRenderSurfaceChanged(int, Surface, int, int)} instead.
 	 */
 	@Deprecated
 	public void onGLSurfaceChanged(GL10 gl, int width, int height) {}
@@ -267,7 +267,7 @@ public abstract class GodotPlugin {
 	 * When using the OpenGL renderer, this is called on the GL thread when the surface is created
 	 * or recreated.
 	 *
-	 * @deprecated Use {@link #onRenderSurfaceCreated(Surface)} instead.
+	 * @deprecated Use {@link #onRenderSurfaceCreated(int, Surface)} instead.
 	 */
 	@Deprecated
 	public void onGLSurfaceCreated(GL10 gl, EGLConfig config) {}
@@ -275,13 +275,13 @@ public abstract class GodotPlugin {
 	/**
 	 * This is called on the render thread when the surface is created or recreated.
 	 */
-	public void onRenderSurfaceCreated(Surface surface) {}
+	public void onRenderSurfaceCreated(int id, Surface surface) {}
 
 	/**
 	 * This is called on the render thread after the surface is created and whenever the surface
 	 * size changes.
 	 */
-	public void onRenderSurfaceChanged(Surface surface, int width, int height) {}
+	public void onRenderSurfaceChanged(int id, Surface surface, int width, int height) {}
 
 	/**
 	 * Invoked once per frame on the render thread after the frame is drawn.
@@ -301,7 +301,7 @@ public abstract class GodotPlugin {
 	 * When using the Vulkan renderer, this is called on the Vulkan thread after the surface is
 	 * created and whenever the surface size changes.
 	 *
-	 * @deprecated Use {@link #onRenderSurfaceChanged(Surface, int, int)} instead.
+	 * @deprecated Use {@link #onRenderSurfaceChanged(int, Surface, int, int)} instead.
 	 */
 	@Deprecated
 	public void onVkSurfaceChanged(Surface surface, int width, int height) {}
@@ -310,7 +310,7 @@ public abstract class GodotPlugin {
 	 * When using the Vulkan renderer, this is called on the Vulkan thread when the surface is
 	 * created or recreated.
 	 *
-	 * @deprecated Use {@link #onRenderSurfaceCreated(Surface)} instead.
+	 * @deprecated Use {@link #onRenderSurfaceCreated(int, Surface)} instead.
 	 */
 	@Deprecated
 	public void onVkSurfaceCreated(Surface surface) {}

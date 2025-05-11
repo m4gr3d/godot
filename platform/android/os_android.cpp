@@ -765,12 +765,12 @@ Error OS_Android::move_to_trash(const String &p_path) {
 	}
 }
 
-void OS_Android::set_display_size(const Size2i &p_size) {
-	display_size = p_size;
+void OS_Android::set_display_size(DisplayServer::WindowID p_window, const Size2i &p_size) {
+	display_size_per_window[p_window] = p_size;
 }
 
-Size2i OS_Android::get_display_size() const {
-	return display_size;
+Size2i OS_Android::get_display_size(DisplayServer::WindowID p_window) const {
+	return display_size_per_window[p_window];
 }
 
 void OS_Android::set_opengl_extensions(const char *p_gl_extensions) {
@@ -780,15 +780,15 @@ void OS_Android::set_opengl_extensions(const char *p_gl_extensions) {
 #endif
 }
 
-void OS_Android::set_native_window(ANativeWindow *p_native_window) {
+void OS_Android::set_native_window(DisplayServer::WindowID p_window, ANativeWindow *p_native_window) {
 #if defined(VULKAN_ENABLED)
-	native_window = p_native_window;
+	native_windows[p_window] = p_native_window;
 #endif
 }
 
-ANativeWindow *OS_Android::get_native_window() const {
+ANativeWindow *OS_Android::get_native_window(DisplayServer::WindowID p_window) const {
 #if defined(VULKAN_ENABLED)
-	return native_window;
+	return native_windows[p_window];
 #else
 	return nullptr;
 #endif
@@ -866,8 +866,7 @@ bool OS_Android::_check_internal_feature_support(const String &p_feature) {
 }
 
 OS_Android::OS_Android(GodotJavaWrapper *p_godot_java, GodotIOJavaWrapper *p_godot_io_java, bool p_use_apk_expansion) {
-	display_size.width = DEFAULT_WINDOW_WIDTH;
-	display_size.height = DEFAULT_WINDOW_HEIGHT;
+	display_size_per_window[DisplayServer::MAIN_WINDOW_ID] = Size2i(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
 
 	use_apk_expansion = p_use_apk_expansion;
 
@@ -875,10 +874,6 @@ OS_Android::OS_Android(GodotJavaWrapper *p_godot_java, GodotIOJavaWrapper *p_god
 
 #if defined(GLES3_ENABLED)
 	gl_extensions = nullptr;
-#endif
-
-#if defined(VULKAN_ENABLED)
-	native_window = nullptr;
 #endif
 
 	godot_java = p_godot_java;

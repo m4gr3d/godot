@@ -75,7 +75,6 @@ GodotJavaWrapper::GodotJavaWrapper(JNIEnv *p_env, jobject p_godot_instance) {
 	_on_godot_main_loop_started = p_env->GetMethodID(godot_class, "onGodotMainLoopStarted", "()V");
 	_on_godot_terminating = p_env->GetMethodID(godot_class, "onGodotTerminating", "()V");
 	_create_new_godot_instance = p_env->GetMethodID(godot_class, "createNewGodotInstance", "([Ljava/lang/String;)I");
-	_get_render_view = p_env->GetMethodID(godot_class, "getRenderView", "()Lorg/godotengine/godot/GodotRenderView;");
 	_begin_benchmark_measure = p_env->GetMethodID(godot_class, "nativeBeginBenchmarkMeasure", "(Ljava/lang/String;Ljava/lang/String;)V");
 	_end_benchmark_measure = p_env->GetMethodID(godot_class, "nativeEndBenchmarkMeasure", "(Ljava/lang/String;Ljava/lang/String;)V");
 	_dump_benchmark = p_env->GetMethodID(godot_class, "nativeDumpBenchmark", "(Ljava/lang/String;)V");
@@ -87,13 +86,29 @@ GodotJavaWrapper::GodotJavaWrapper(JNIEnv *p_env, jobject p_godot_instance) {
 	_is_in_immersive_mode = p_env->GetMethodID(godot_class, "isInImmersiveMode", "()Z");
 	_on_editor_workspace_selected = p_env->GetMethodID(godot_class, "nativeOnEditorWorkspaceSelected", "(Ljava/lang/String;)V");
 	_get_activity = p_env->GetMethodID(godot_class, "getActivity", "()Landroid/app/Activity;");
+	_create_sub_window = p_env->GetMethodID(godot_class, "nativeCreateSubWindow", "(IIIIZIIII)Z");
+	_show_sub_window = p_env->GetMethodID(godot_class, "nativeShowSubWindow", "(I)V");
+	_delete_sub_window = p_env->GetMethodID(godot_class, "nativeDeleteSubWindow", "(I)V");
+	_can_capture_pointer = p_env->GetMethodID(godot_class, "canCapturePointer", "()Z");
+	_configure_pointer_icon = p_env->GetMethodID(godot_class, "configurePointerIcon", "(ILjava/lang/String;FF)V");
+	_set_pointer_icon = p_env->GetMethodID(godot_class, "setPointerIcon", "(I)V");
+
+	int android_device_api_level = android_get_device_api_level();
+	if (android_device_api_level >= __ANDROID_API_O__) {
+		_request_pointer_capture = p_env->GetMethodID(godot_class, "requestPointerCapture", "()V");
+		_release_pointer_capture = p_env->GetMethodID(godot_class, "releasePointerCapture", "()V");
+	}
+
+	_get_sub_window_position_x = p_env->GetMethodID(godot_class, "getSubWindowPositionX", "(I)I");
+	_get_sub_window_position_y = p_env->GetMethodID(godot_class, "getSubWindowPositionY", "(I)I");
+	_set_sub_window_position = p_env->GetMethodID(godot_class, "setSubWindowPosition", "(III)V");
+	_set_sub_window_size = p_env->GetMethodID(godot_class, "setSubWindowSize", "(III)V");
+	_is_window_focused = p_env->GetMethodID(godot_class, "isWindowFocused", "(I)Z");
+	_request_window_focus = p_env->GetMethodID(godot_class, "requestWindowFocus", "(I)V");
+	_set_window_transient_parent = p_env->GetMethodID(godot_class, "setWindowTransientParent", "(II)V");
 }
 
 GodotJavaWrapper::~GodotJavaWrapper() {
-	if (godot_view) {
-		delete godot_view;
-	}
-
 	JNIEnv *env = get_jni_env();
 	ERR_FAIL_NULL(env);
 	env->DeleteGlobalRef(godot_instance);
@@ -108,21 +123,6 @@ jobject GodotJavaWrapper::get_activity() {
 		return activity;
 	}
 	return nullptr;
-}
-
-GodotJavaViewWrapper *GodotJavaWrapper::get_godot_view() {
-	if (godot_view != nullptr) {
-		return godot_view;
-	}
-	if (_get_render_view) {
-		JNIEnv *env = get_jni_env();
-		ERR_FAIL_NULL_V(env, nullptr);
-		jobject godot_render_view = env->CallObjectMethod(godot_instance, _get_render_view);
-		if (!env->IsSameObject(godot_render_view, nullptr)) {
-			godot_view = new GodotJavaViewWrapper(godot_render_view);
-		}
-	}
-	return godot_view;
 }
 
 void GodotJavaWrapper::on_godot_setup_completed(JNIEnv *p_env) {
@@ -594,5 +594,152 @@ void GodotJavaWrapper::on_editor_workspace_selected(const String &p_workspace) {
 
 		jstring j_workspace = env->NewStringUTF(p_workspace.utf8().get_data());
 		env->CallVoidMethod(godot_instance, _on_editor_workspace_selected, j_workspace);
+	}
+}
+
+bool GodotJavaWrapper::create_sub_window(DisplayServer::WindowID p_sub_window_id,
+		DisplayServer::WindowMode p_sub_window_mode,
+		uint32_t p_flags,
+		const Rect2i &p_sub_window_rect,
+		bool p_exclusive,
+		DisplayServer::WindowID p_transient_parent_id) {
+	ERR_FAIL_COND_V_MSG(p_sub_window_id == DisplayServer::MAIN_WINDOW_ID, false,
+			"Attempt to create sub window for main window id");
+	if (_create_sub_window) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL_V(env, false);
+
+		return env->CallBooleanMethod(godot_instance, _create_sub_window, p_transient_parent_id, p_sub_window_id,
+				p_sub_window_mode, p_flags, p_exclusive, p_sub_window_rect.position.x,
+				p_sub_window_rect.position.y, p_sub_window_rect.size.width,
+				p_sub_window_rect.size.height);
+	}
+	return false;
+}
+
+void GodotJavaWrapper::show_sub_window(DisplayServer::WindowID p_sub_window_id) {
+	if (_show_sub_window) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_instance, _show_sub_window, p_sub_window_id);
+	}
+}
+
+void GodotJavaWrapper::delete_sub_window(DisplayServer::WindowID p_sub_window_id) {
+	if (_delete_sub_window) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_instance, _delete_sub_window, p_sub_window_id);
+	}
+}
+
+bool GodotJavaWrapper::can_capture_pointer() const {
+	// We can capture the pointer if the other jni capture method ids are initialized,
+	// and GodotView#canCapturePointer() returns true.
+	if (_request_pointer_capture != nullptr && _release_pointer_capture != nullptr && _can_capture_pointer != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL_V(env, false);
+
+		return env->CallBooleanMethod(godot_instance, _can_capture_pointer);
+	}
+
+	return false;
+}
+
+void GodotJavaWrapper::request_pointer_capture() {
+	if (_request_pointer_capture != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_instance, _request_pointer_capture);
+	}
+}
+
+void GodotJavaWrapper::release_pointer_capture() {
+	if (_release_pointer_capture != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_instance, _release_pointer_capture);
+	}
+}
+
+void GodotJavaWrapper::configure_pointer_icon(int pointer_type, const String &image_path, const Vector2 &p_hotspot) {
+	if (_configure_pointer_icon != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		jstring jImagePath = env->NewStringUTF(image_path.utf8().get_data());
+		env->CallVoidMethod(godot_instance, _configure_pointer_icon, pointer_type, jImagePath, p_hotspot.x, p_hotspot.y);
+		env->DeleteLocalRef(jImagePath);
+	}
+}
+
+void GodotJavaWrapper::set_pointer_icon(int pointer_type) {
+	if (_set_pointer_icon != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_instance, _set_pointer_icon, pointer_type);
+	}
+}
+
+Point2i GodotJavaWrapper::get_window_position(DisplayServer::WindowID p_sub_window_id) {
+	if (_get_sub_window_position_x != nullptr && _get_sub_window_position_y != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL_V(env, Point2i());
+
+		int position_x = env->CallIntMethod(godot_instance, _get_sub_window_position_x, p_sub_window_id);
+		int position_y = env->CallIntMethod(godot_instance, _get_sub_window_position_y, p_sub_window_id);
+		return Point2i(position_x, position_y);
+	}
+	return Point2i();
+}
+
+void GodotJavaWrapper::set_window_position(DisplayServer::WindowID p_sub_window_id, Point2i p_position) {
+	if (_set_sub_window_position != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_instance, _set_sub_window_position, p_sub_window_id, p_position.x, p_position.y);
+	}
+}
+
+void GodotJavaWrapper::set_window_size(DisplayServer::WindowID p_sub_window_id, Size2i p_size) {
+	if (_set_sub_window_size != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_instance, _set_sub_window_size, p_sub_window_id, p_size.width, p_size.height);
+	}
+}
+
+bool GodotJavaWrapper::is_window_focused(DisplayServer::WindowID p_window_id) {
+	if (_is_window_focused) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL_V(env, false);
+
+		return env->CallBooleanMethod(godot_instance, _is_window_focused, p_window_id);
+	}
+	return false;
+}
+
+void GodotJavaWrapper::request_window_focus(DisplayServer::WindowID p_window_id) {
+	if (_request_window_focus) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_instance, _request_window_focus, p_window_id);
+	}
+}
+
+void GodotJavaWrapper::set_window_transient_parent(DisplayServer::WindowID p_sub_window_id, DisplayServer::WindowID p_parent_id) {
+	if (_set_window_transient_parent) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_instance, _set_window_transient_parent, p_sub_window_id, p_parent_id);
 	}
 }

@@ -73,6 +73,8 @@ class DisplayServerAndroid : public DisplayServer {
 	bool keep_screen_on;
 	bool swap_buffers_flag;
 
+	WindowID sub_window_id_counter = MAIN_WINDOW_ID + 1;
+
 	CursorShape cursor_shape = CursorShape::CURSOR_ARROW;
 
 #if defined(RD_ENABLED)
@@ -81,12 +83,16 @@ class DisplayServerAndroid : public DisplayServer {
 #endif
 	NativeMenu *native_menu = nullptr;
 
-	ObjectID window_attached_instance_id;
-
+	// TODO: Move in WindowData and update event logic using X11 as reference.
 	Callable window_event_callback;
-	Callable input_event_callback;
 	Callable input_text_callback;
-	Callable rect_changed_callback;
+
+	struct WindowData {
+		ObjectID window_attached_instance_id;
+
+		Callable rect_changed_callback;
+		Callable input_event_callback;
+	};
 
 	Callable system_theme_changed;
 	Callable hardware_keyboard_connection_changed;
@@ -96,9 +102,13 @@ class DisplayServerAndroid : public DisplayServer {
 
 	Callable file_picker_callback;
 
+	HashMap<WindowID, WindowData> windows;
+
 	void _window_callback(const Callable &p_callable, const Variant &p_arg, bool p_deferred = false) const;
 
 	static void _dispatch_input_events(const Ref<InputEvent> &p_event);
+
+	Error _setup_window(DisplayServer::WindowID p_window, VSyncMode p_vsync_mode);
 
 public:
 	static DisplayServerAndroid *get_singleton();
@@ -161,6 +171,10 @@ public:
 	virtual bool has_hardware_keyboard() const override;
 	virtual void set_hardware_keyboard_connection_change_callback(const Callable &p_callable) override;
 	void emit_hardware_keyboard_connection_changed(bool p_connected);
+
+	virtual WindowID create_sub_window(WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Rect2i &p_rect = Rect2i(), bool p_exclusive = false, WindowID p_transient_parent = INVALID_WINDOW_ID) override;
+	virtual void show_window(WindowID p_id) override;
+	virtual void delete_sub_window(WindowID p_id) override;
 
 	virtual void window_set_window_event_callback(const Callable &p_callable, WindowID p_window = MAIN_WINDOW_ID) override;
 	virtual void window_set_input_event_callback(const Callable &p_callable, WindowID p_window = MAIN_WINDOW_ID) override;
@@ -242,8 +256,8 @@ public:
 	static Vector<String> get_rendering_drivers_func();
 	static void register_android_driver();
 
-	void reset_window();
-	void notify_surface_changed(int p_width, int p_height);
+	void reset_window(DisplayServer::WindowID p_window);
+	void notify_surface_changed(DisplayServer::WindowID p_window, int p_width, int p_height);
 
 	virtual Point2i mouse_get_position() const override;
 	virtual BitField<MouseButtonMask> mouse_get_button_state() const override;
