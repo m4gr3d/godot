@@ -79,15 +79,15 @@ public class GodotLib {
 	 * @param p_surface
 	 * @param p_width
 	 * @param p_height
-	 * @see GodotRenderer#onRenderSurfaceChanged(Surface, int, int)
+	 * @see GodotRenderer#onRenderSurfaceChanged(int, Surface, int, int)
 	 */
-	public static native void resize(Surface p_surface, int p_width, int p_height);
+	public static native void resize(int id, Surface p_surface, int p_width, int p_height);
 
 	/**
 	 * Invoked on the render thread when the underlying Android surface is created or recreated.
 	 * @param p_surface
 	 */
-	public static native void newcontext(Surface p_surface);
+	public static native void newcontext(int id, Surface p_surface);
 
 	/**
 	 * Forward {@link Activity#onBackPressed()} event.
@@ -108,16 +108,16 @@ public class GodotLib {
 	/**
 	 * Forward touch events.
 	 */
-	public static native void dispatchTouchEvent(int event, int pointer, int pointerCount, float[] positions, boolean doubleTap);
+	public static native void dispatchTouchEvent(int viewId, int event, int pointer, int pointerCount, float[] positions, boolean doubleTap);
 
 	/**
 	 * Dispatch mouse events
 	 */
-	public static native void dispatchMouseEvent(int event, int buttonMask, float x, float y, float deltaX, float deltaY, boolean doubleClick, boolean sourceMouseRelative, float pressure, float tiltX, float tiltY);
+	public static native void dispatchMouseEvent(int viewId, int event, int buttonMask, float x, float y, float deltaX, float deltaY, boolean doubleClick, boolean sourceMouseRelative, float pressure, float tiltX, float tiltY);
 
-	public static native void magnify(float x, float y, float factor);
+	public static native void magnify(int viewId, float x, float y, float factor);
 
-	public static native void pan(float x, float y, float deltaX, float deltaY);
+	public static native void pan(int viewId, float x, float y, float deltaX, float deltaY);
 
 	/**
 	 * Forward accelerometer sensor events.

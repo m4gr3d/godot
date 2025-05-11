@@ -68,15 +68,15 @@ internal abstract class RenderThread(tag: String) : Thread(tag) {
 	/**
 	 * Invoked when the [android.view.Surface] has been created.
 	 */
-	open fun surfaceCreated(holder: SurfaceHolder, surfaceViewWeakRef: WeakReference<GLSurfaceView>? = null) { }
+	open fun surfaceCreated(windowId: Int, holder: SurfaceHolder, surfaceViewWeakRef: WeakReference<GLSurfaceView>? = null) { }
 
 	/**
 	 * Invoked following structural updates to [android.view.Surface].
 	 */
-	open fun surfaceChanged(holder: SurfaceHolder, width: Int, height: Int) { }
+	open fun surfaceChanged(windowId: Int, holder: SurfaceHolder, width: Int, height: Int) { }
 
 	/**
 	 * Invoked when the [android.view.Surface] is no longer available.
 	 */
-	open fun surfaceDestroyed(holder: SurfaceHolder) { }
+	open fun surfaceDestroyed(windowId: Int, holder: SurfaceHolder) { }
 }

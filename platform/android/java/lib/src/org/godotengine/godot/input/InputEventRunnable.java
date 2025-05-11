@@ -126,6 +126,7 @@ final class InputEventRunnable implements Runnable {
 	private boolean eventPressed;
 
 	// common touch / mouse fields
+	private int eventViewId;
 	private int eventAction;
 	private boolean doubleTap;
 
@@ -135,7 +136,8 @@ final class InputEventRunnable implements Runnable {
 	private float pressure;
 	private float tiltX;
 	private float tiltY;
-	void setMouseEvent(int eventAction, int buttonsMask, float x, float y, float deltaX, float deltaY, boolean doubleClick, boolean sourceMouseRelative, float pressure, float tiltX, float tiltY) {
+	void setMouseEvent(int viewId, int eventAction, int buttonsMask, float x, float y, float deltaX, float deltaY, boolean doubleClick, boolean sourceMouseRelative, float pressure, float tiltX, float tiltY) {
+		this.eventViewId = viewId;
 		this.currentEventType = EventType.MOUSE;
 		this.eventAction = eventAction;
 		this.buttonsMask = buttonsMask;
@@ -154,7 +156,8 @@ final class InputEventRunnable implements Runnable {
 	private int actionPointerId;
 	private int pointerCount;
 	private final float[] positions = new float[MAX_TOUCH_POINTER_COUNT * 6]; // pointerId1, x1, y1, pressure1, tiltX1, tiltY1, pointerId2, etc...
-	void setTouchEvent(MotionEvent event, int eventAction, boolean doubleTap) {
+	void setTouchEvent(int viewId, MotionEvent event, int eventAction, boolean doubleTap) {
+		this.eventViewId = viewId;
 		this.currentEventType = EventType.TOUCH;
 		this.eventAction = eventAction;
 		this.doubleTap = doubleTap;
@@ -172,7 +175,8 @@ final class InputEventRunnable implements Runnable {
 
 	// Magnify event fields and setter
 	private float magnifyFactor;
-	void setMagnifyEvent(float x, float y, float factor) {
+	void setMagnifyEvent(int viewId, float x, float y, float factor) {
+		this.eventViewId = viewId;
 		this.currentEventType = EventType.MAGNIFY;
 		this.eventX = x;
 		this.eventY = y;
@@ -180,7 +184,8 @@ final class InputEventRunnable implements Runnable {
 	}
 
 	// Pan event setter
-	void setPanEvent(float x, float y, float deltaX, float deltaY) {
+	void setPanEvent(int viewId, float x, float y, float deltaX, float deltaY) {
+		this.eventViewId = viewId;
 		this.currentEventType = EventType.PAN;
 		this.eventX = x;
 		this.eventY = y;
@@ -268,6 +273,7 @@ final class InputEventRunnable implements Runnable {
 			switch (currentEventType) {
 				case MOUSE:
 					GodotLib.dispatchMouseEvent(
+							eventViewId,
 							eventAction,
 							buttonsMask,
 							eventX,
@@ -283,6 +289,7 @@ final class InputEventRunnable implements Runnable {
 
 				case TOUCH:
 					GodotLib.dispatchTouchEvent(
+							eventViewId,
 							eventAction,
 							actionPointerId,
 							pointerCount,
@@ -291,11 +298,11 @@ final class InputEventRunnable implements Runnable {
 					break;
 
 				case MAGNIFY:
-					GodotLib.magnify(eventX, eventY, magnifyFactor);
+					GodotLib.magnify(eventViewId, eventX, eventY, magnifyFactor);
 					break;
 
 				case PAN:
-					GodotLib.pan(eventX, eventY, eventDeltaX, eventDeltaY);
+					GodotLib.pan(eventViewId, eventX, eventY, eventDeltaX, eventDeltaY);
 					break;
 
 				case JOYSTICK_BUTTON:

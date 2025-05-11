@@ -35,6 +35,7 @@
 #include "core/os/main_loop.h"
 #include "drivers/unix/os_unix.h"
 #include "servers/audio_server.h"
+#include "servers/display_server.h"
 
 class GodotJavaWrapper;
 class GodotIOJavaWrapper;
@@ -43,7 +44,7 @@ struct ANativeWindow;
 
 class OS_Android : public OS_Unix {
 private:
-	Size2i display_size;
+	HashMap<int, Size2i> display_size_per_window;
 
 	bool use_apk_expansion;
 
@@ -52,7 +53,7 @@ private:
 #endif
 
 #if defined(VULKAN_ENABLED)
-	ANativeWindow *native_window = nullptr;
+	HashMap<int, ANativeWindow *> native_windows;
 #endif
 
 	mutable String data_dir_cache;
@@ -131,13 +132,13 @@ public:
 	void main_loop_focusout();
 	void main_loop_focusin();
 
-	void set_display_size(const Size2i &p_size);
-	Size2i get_display_size() const;
+	void set_display_size(DisplayServer::WindowID p_window, const Size2i &p_size);
+	Size2i get_display_size(DisplayServer::WindowID p_window = DisplayServer::MAIN_WINDOW_ID) const;
 
 	void set_opengl_extensions(const char *p_gl_extensions);
 
-	void set_native_window(ANativeWindow *p_native_window);
-	ANativeWindow *get_native_window() const;
+	void set_native_window(DisplayServer::WindowID p_window, ANativeWindow *p_native_window);
+	ANativeWindow *get_native_window(DisplayServer::WindowID p_window = DisplayServer::MAIN_WINDOW_ID) const;
 
 	virtual Error shell_open(const String &p_uri) override;
 

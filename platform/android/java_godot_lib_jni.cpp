@@ -211,33 +211,33 @@ JNIEXPORT jboolean JNICALL Java_org_godotengine_godot_GodotLib_setup(JNIEnv *env
 	return true;
 }
 
-JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_resize(JNIEnv *env, jclass clazz, jobject p_surface, jint p_width, jint p_height) {
+JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_resize(JNIEnv *env, jclass clazz, jint p_id, jobject p_surface, jint p_width, jint p_height) {
 	if (os_android) {
-		os_android->set_display_size(Size2i(p_width, p_height));
+		os_android->set_display_size(p_id, Size2i(p_width, p_height));
 
 		// No need to reset the surface during startup
 		if (step.get() > STEP_SETUP) {
 			if (p_surface) {
 				ANativeWindow *native_window = ANativeWindow_fromSurface(env, p_surface);
-				os_android->set_native_window(native_window);
+				os_android->set_native_window(p_id, native_window);
 			}
-			DisplayServerAndroid::get_singleton()->reset_window();
-			DisplayServerAndroid::get_singleton()->notify_surface_changed(p_width, p_height);
+			DisplayServerAndroid::get_singleton()->reset_window(p_id);
+			DisplayServerAndroid::get_singleton()->notify_surface_changed(p_id, p_width, p_height);
 		}
 	}
 }
 
-JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_newcontext(JNIEnv *env, jclass clazz, jobject p_surface) {
+JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_newcontext(JNIEnv *env, jclass clazz, jint p_id, jobject p_surface) {
 	if (os_android) {
-		if (step.get() == STEP_SETUP) {
+		if (p_id == DisplayServer::MAIN_WINDOW_ID && step.get() != STEP_SETUP) {
+			// Rendering context recreated because it was lost; restart app to let it reload everything
+			_terminate(env, true);
+		} else {
 			// During startup
 			if (p_surface) {
 				ANativeWindow *native_window = ANativeWindow_fromSurface(env, p_surface);
-				os_android->set_native_window(native_window);
+				os_android->set_native_window(p_id, native_window);
 			}
-		} else {
-			// Rendering context recreated because it was lost; restart app to let it reload everything
-			_terminate(env, true);
 		}
 	}
 }
@@ -314,16 +314,16 @@ JNIEXPORT jboolean JNICALL Java_org_godotengine_godot_GodotLib_step(JNIEnv *env,
 }
 
 // Called on the UI thread
-JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_dispatchMouseEvent(JNIEnv *env, jclass clazz, jint p_event_type, jint p_button_mask, jfloat p_x, jfloat p_y, jfloat p_delta_x, jfloat p_delta_y, jboolean p_double_click, jboolean p_source_mouse_relative, jfloat p_pressure, jfloat p_tilt_x, jfloat p_tilt_y) {
+JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_dispatchMouseEvent(JNIEnv *env, jclass clazz, jint p_window_id, jint p_event_type, jint p_button_mask, jfloat p_x, jfloat p_y, jfloat p_delta_x, jfloat p_delta_y, jboolean p_double_click, jboolean p_source_mouse_relative, jfloat p_pressure, jfloat p_tilt_x, jfloat p_tilt_y) {
 	if (step.get() <= STEP_SETUP) {
 		return;
 	}
 
-	input_handler->process_mouse_event(p_event_type, p_button_mask, Point2(p_x, p_y), Vector2(p_delta_x, p_delta_y), p_double_click, p_source_mouse_relative, p_pressure, Vector2(p_tilt_x, p_tilt_y));
+	input_handler->process_mouse_event(p_window_id, p_event_type, p_button_mask, Point2(p_x, p_y), Vector2(p_delta_x, p_delta_y), p_double_click, p_source_mouse_relative, p_pressure, Vector2(p_tilt_x, p_tilt_y));
 }
 
 // Called on the UI thread
-JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_dispatchTouchEvent(JNIEnv *env, jclass clazz, jint ev, jint pointer, jint pointer_count, jfloatArray position, jboolean p_double_tap) {
+JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_dispatchTouchEvent(JNIEnv *env, jclass clazz, jint p_window_id, jint ev, jint pointer, jint pointer_count, jfloatArray position, jboolean p_double_tap) {
 	if (step.get() <= STEP_SETUP) {
 		return;
 	}
@@ -337,6 +337,7 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_dispatchTouchEvent(JN
 		tp.pos = Point2(p[1], p[2]);
 		tp.pressure = p[3];
 		tp.tilt = Vector2(p[4], p[5]);
+		tp.window_id = p_window_id;
 		points.push_back(tp);
 	}
 
@@ -344,19 +345,19 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_dispatchTouchEvent(JN
 }
 
 // Called on the UI thread
-JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_magnify(JNIEnv *env, jclass clazz, jfloat p_x, jfloat p_y, jfloat p_factor) {
+JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_magnify(JNIEnv *env, jclass clazz, jint p_window_id, jfloat p_x, jfloat p_y, jfloat p_factor) {
 	if (step.get() <= STEP_SETUP) {
 		return;
 	}
-	input_handler->process_magnify(Point2(p_x, p_y), p_factor);
+	input_handler->process_magnify(p_window_id, Point2(p_x, p_y), p_factor);
 }
 
 // Called on the UI thread
-JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_pan(JNIEnv *env, jclass clazz, jfloat p_x, jfloat p_y, jfloat p_delta_x, jfloat p_delta_y) {
+JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_pan(JNIEnv *env, jclass clazz, jint p_window_id, jfloat p_x, jfloat p_y, jfloat p_delta_x, jfloat p_delta_y) {
 	if (step.get() <= STEP_SETUP) {
 		return;
 	}
-	input_handler->process_pan(Point2(p_x, p_y), Vector2(p_delta_x, p_delta_y));
+	input_handler->process_pan(p_window_id, Point2(p_x, p_y), Vector2(p_delta_x, p_delta_y));
 }
 
 // Called on the UI thread

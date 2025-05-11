@@ -37,6 +37,7 @@ import android.view.Surface
 import org.godotengine.godot.GodotLib
 import org.godotengine.godot.plugin.GodotPluginRegistry
 import org.godotengine.godot.render.GLSurfaceView.GLThread
+import org.godotengine.godot.utils.SubWindowManager
 
 /**
  * Responsible for setting up and driving Godot rendering logic.
@@ -234,31 +235,35 @@ internal class GodotRenderer(val useVulkan: Boolean) : Renderer {
 		return swapBuffers
 	}
 
-	override fun onRenderSurfaceChanged(surface: Surface?, width: Int, height: Int) {
+	override fun onRenderSurfaceChanged(id: Int, surface: Surface?, width: Int, height: Int) {
 		Log.d(TAG, "Rendering surface changed: $surface")
-		GodotLib.resize(surface, width, height)
+		GodotLib.resize(id, surface, width, height)
 
 		for (plugin in pluginRegistry.allPlugins) {
+			if (id == SubWindowManager.MAIN_WINDOW_ID) {
 				if (useVulkan) {
 					plugin.onVkSurfaceChanged(surface, width, height)
 				} else {
 					plugin.onGLSurfaceChanged(null, width, height)
 				}
-			plugin.onRenderSurfaceChanged(surface, width, height)
+			}
+			plugin.onRenderSurfaceChanged(id, surface, width, height)
 		}
 	}
 
-	override fun onRenderSurfaceCreated(surface: Surface?) {
+	override fun onRenderSurfaceCreated(id: Int, surface: Surface?) {
 		Log.d(TAG, "Rendering surface created: $surface")
-		GodotLib.newcontext(surface)
+		GodotLib.newcontext(id, surface)
 
 		for (plugin in pluginRegistry.allPlugins) {
+			if (id == SubWindowManager.MAIN_WINDOW_ID) {
 				if (useVulkan) {
 					plugin.onVkSurfaceCreated(surface)
 				} else {
 					plugin.onGLSurfaceCreated(null, null)
 				}
-			plugin.onRenderSurfaceCreated(surface)
+			}
+			plugin.onRenderSurfaceCreated(id, surface)
 		}
 	}
 }

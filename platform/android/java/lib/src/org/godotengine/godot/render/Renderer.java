@@ -96,14 +96,14 @@ public interface Renderer {
 	/**
 	 * Called when the surface is created or recreated.
 	 */
-	void onRenderSurfaceCreated(Surface surface);
+	void onRenderSurfaceCreated(int id, Surface surface);
 
 	/**
 	 * Called when the surface changed size.
 	 * <p>
 	 * Called after the surface is created and whenever the surface size changes.
 	 */
-	void onRenderSurfaceChanged(Surface surface, int width, int height);
+	void onRenderSurfaceChanged(int id, Surface surface, int width, int height);
 
 	// -- GODOT start --
 
