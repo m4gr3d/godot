@@ -37,11 +37,15 @@ import android.content.*
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.Resources
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.os.*
+import android.text.TextUtils
 import android.util.Log
+import android.util.SparseArray
 import android.util.TypedValue
 import android.view.*
 import android.widget.FrameLayout
@@ -67,10 +71,12 @@ import org.godotengine.godot.render.GodotRenderer
 import org.godotengine.godot.render.GodotVulkanRenderView
 import org.godotengine.godot.render.Renderer
 import org.godotengine.godot.tts.GodotTTS
+import org.godotengine.godot.utils.*
 import org.godotengine.godot.utils.DialogUtils
 import org.godotengine.godot.utils.GodotNetUtils
 import org.godotengine.godot.utils.PermissionsUtil
 import org.godotengine.godot.utils.PermissionsUtil.requestPermission
+import org.godotengine.godot.utils.SubWindowManager
 import org.godotengine.godot.utils.beginBenchmarkMeasure
 import org.godotengine.godot.utils.benchmarkFile
 import org.godotengine.godot.utils.dumpBenchmark
@@ -82,6 +88,7 @@ import java.io.FileInputStream
 import java.io.InputStream
 import java.security.MessageDigest
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -183,10 +190,14 @@ class Godot private constructor(val context: Context) {
 	private var darkMode = false
 
 	internal var containerLayout: FrameLayout? = null
-	var renderView: GodotRenderView? = null
+	private val renderViews = ConcurrentHashMap<Int, GodotRenderView>()
+	private val customPointerIcons = SparseArray<PointerIcon>()
+
+	@JvmOverloads
+	fun getRenderView(renderViewId: Int = SubWindowManager.MAIN_WINDOW_ID): GodotRenderView? = renderViews[renderViewId]
 
 	/**
-	 * Returns true if the native engine has been initialized through [onInitNativeLayer], false otherwise.
+	 * Returns true if the native engine has been initialized through [initEngine], false otherwise.
 	 */
 	private fun isNativeInitialized() = nativeLayerInitializeCompleted && nativeLayerSetupCompleted && ::renderer.isInitialized
 
@@ -460,6 +471,16 @@ class Godot private constructor(val context: Context) {
 	@Keep
 	fun isInEdgeToEdgeMode() = isEdgeToEdge.get()
 
+	internal fun createRenderView(windowId: Int, shouldBeTransparent: Boolean = false): GodotRenderView {
+		return renderViews.getOrPut(windowId) {
+			if (renderer.useVulkan) {
+				GodotVulkanRenderView(this, renderer, windowId, godotInputHandler, shouldBeTransparent)
+			} else {
+				GodotGLRenderView(this, renderer, windowId, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent)
+			}
+		}
+	}
+
 	/**
 	 * Used to complete initialization of the view used by the engine for rendering.
 	 *
@@ -515,23 +536,17 @@ class Godot private constructor(val context: Context) {
 			val shouldBeTransparent =
 				!isProjectManagerHint() && !isEditorHint() && java.lang.Boolean.parseBoolean(GodotLib.getGlobal("display/window/per_pixel_transparency/allowed"))
 			Log.d(TAG, "Render view should be transparent: $shouldBeTransparent")
-			renderView = if (renderer.useVulkan) {
-				GodotVulkanRenderView(this, renderer, godotInputHandler, shouldBeTransparent)
-			} else {
-				GodotGLRenderView(this, renderer, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent)
-			}
+			val mainRenderView = createRenderView(SubWindowManager.MAIN_WINDOW_ID, shouldBeTransparent)
 
-			renderView?.let {
-				containerLayout?.addView(
-					it.view,
-					ViewGroup.LayoutParams(
-							ViewGroup.LayoutParams.MATCH_PARENT,
-							ViewGroup.LayoutParams.MATCH_PARENT
-					)
+			containerLayout?.addView(
+				mainRenderView.view,
+				ViewGroup.LayoutParams(
+						ViewGroup.LayoutParams.MATCH_PARENT,
+						ViewGroup.LayoutParams.MATCH_PARENT
 				)
-			}
+			)
 
-			editText.setView(renderView)
+			editText.setView(mainRenderView)
 			io.setEdit(editText)
 
 			val activity = host.activity
@@ -702,7 +717,7 @@ class Godot private constructor(val context: Context) {
 	 * Configuration change callback
 	*/
 	fun onConfigurationChanged(newConfig: Configuration) {
-		renderView?.inputHandler?.onConfigurationChanged(newConfig)
+		godotInputHandler.onConfigurationChanged(newConfig)
 
 		val newDarkMode = newConfig.uiMode.and(Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 		if (darkMode != newDarkMode) {
@@ -1218,5 +1233,179 @@ class Godot private constructor(val context: Context) {
 	@Keep
 	private fun nativeOnEditorWorkspaceSelected(workspace: String) {
 		primaryHost?.onEditorWorkspaceSelected(workspace)
+	}
+
+	@Keep
+	private fun nativeCreateSubWindow(
+		transientParentId: Int,
+		subWindowId: Int,
+		mode: Int,
+		flags: Int,
+		exclusive: Boolean,
+		positionX: Int,
+		positionY: Int,
+		sizeWidth: Int,
+		sizeHeight: Int
+	): Boolean {
+		return SubWindowManager.createSubWindow(
+			this,
+			transientParentId,
+			subWindowId,
+			SubWindowManager.WindowMode.fromNative(mode),
+			flags,
+			exclusive,
+			positionX,
+			positionY,
+			sizeWidth,
+			sizeHeight
+		)
+	}
+
+	@Keep
+	private fun nativeShowSubWindow(subWindowId: Int) {
+		runOnHostThread {
+			SubWindowManager.showSubWindow(subWindowId)
+		}
+	}
+
+	@Keep
+	private fun nativeDeleteSubWindow(subWindowId: Int) {
+		runOnHostThread {
+			SubWindowManager.deleteSubWindow(subWindowId)
+		}
+	}
+
+	/**
+	 * @return true if pointer capture is supported.
+	 */
+	fun canCapturePointer(): Boolean {
+		// Pointer capture is not supported on native XR devices.
+		return !isNativeXRDevice(context) && godotInputHandler.canCapturePointer()
+	}
+
+	@Keep
+	private fun requestPointerCapture() {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			for (renderView in renderViews.values) {
+				renderView.view.requestPointerCapture()
+			}
+		}
+	}
+
+	@Keep
+	private fun releasePointerCapture() {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			for (renderView in renderViews.values) {
+				renderView.view.releasePointerCapture()
+			}
+		}
+	}
+
+	/**
+	 * Used to configure the PointerIcon for the given type.
+	 *
+	 * Called from JNI
+	 */
+	@Keep
+	private fun configurePointerIcon(
+		pointerType: Int,
+		imagePath: String,
+		hotSpotX: Float,
+		hotSpotY: Float
+	) {
+		try {
+			var bitmap: Bitmap? = null
+			if (!TextUtils.isEmpty(imagePath)) {
+				if (directoryAccessHandler.filesystemFileExists(imagePath)) {
+					// Try to load the bitmap from the file system
+					bitmap = BitmapFactory.decodeFile(imagePath)
+				} else if (directoryAccessHandler.assetsFileExists(imagePath)) {
+					// Try to load the bitmap from the assets directory
+					val am = context.assets
+					val imageInputStream = am.open(imagePath)
+					bitmap = BitmapFactory.decodeStream(imageInputStream)
+				}
+			}
+
+			if (bitmap != null) {
+				val customPointerIcon = PointerIcon.create(bitmap, hotSpotX, hotSpotY)
+				customPointerIcons.put(pointerType, customPointerIcon)
+			}
+		} catch (e: Exception) {
+			// Reset the custom pointer icon
+			customPointerIcons.delete(pointerType)
+		}
+	}
+
+	/**
+	 * Called from JNI to change pointer icon
+	 */
+	@Keep
+	private fun setPointerIcon(pointerType: Int) {
+		var pointerIcon = customPointerIcons[pointerType]
+		if (pointerIcon == null) {
+			pointerIcon = PointerIcon.getSystemIcon(context, pointerType)
+		}
+		for (renderView in renderViews.values) {
+			renderView.view.pointerIcon = pointerIcon
+		}
+	}
+
+	@Keep
+	private fun getSubWindowPositionX(subWindowId: Int): Int {
+		return SubWindowManager.getSubWindowPositionX(subWindowId)
+	}
+
+	@Keep
+	private fun getSubWindowPositionY(subWindowId: Int): Int {
+		return SubWindowManager.getSubWindowPositionY(subWindowId)
+	}
+
+	@Keep
+	private fun setSubWindowPosition(subWindowId: Int, positionX: Int, positionY: Int) {
+		runOnHostThread {
+			SubWindowManager.setSubWindowPosition(subWindowId, positionX, positionY)
+		}
+	}
+
+	@Keep
+	private fun setSubWindowSize(subWindowId: Int, width: Int, height: Int) {
+		runOnHostThread {
+			SubWindowManager.setSubWindowSize(subWindowId, width, height)
+		}
+	}
+
+	@Keep
+	private fun isWindowFocused(windowId: Int): Boolean {
+		return renderViews[windowId]?.view?.hasFocus() ?: false
+	}
+
+	@Keep
+	private fun requestWindowFocus(windowId: Int) {
+		runOnHostThread {
+			renderViews[windowId]?.view?.requestFocus()
+		}
+	}
+
+	@Keep
+	private fun setWindowTransientParent(subWindowId: Int, parentWindowId: Int) {
+		runOnHostThread {
+			SubWindowManager.setWindowTransientParent(subWindowId, parentWindowId)
+		}
+	}
+
+	@Keep
+	private fun makeGLWindowCurrent(windowId: Int): Boolean {
+		return renderer.renderThread.makeEglCurrent(windowId)
+	}
+
+	@Keep
+	private fun eglSwapBuffers(windowId: Int) {
+		renderer.renderThread.eglSwapBuffers(windowId)
+	}
+
+	@Keep
+	private fun releaseCurrentGLWindow(windowId: Int) {
+		renderer.renderThread.releaseCurrentGLWindow(windowId)
 	}
 }

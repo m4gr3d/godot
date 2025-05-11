@@ -56,14 +56,14 @@ internal open class VkSurfaceView(context: Context, private val renderer: GodotR
 	}
 
 	override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-		renderer.renderThread.surfaceChanged(holder, width, height)
+		renderer.renderThread.surfaceChanged(id, holder, width, height)
 	}
 
 	override fun surfaceDestroyed(holder: SurfaceHolder) {
-		renderer.renderThread.surfaceDestroyed(holder)
+		renderer.renderThread.surfaceDestroyed(id, holder)
 	}
 
 	override fun surfaceCreated(holder: SurfaceHolder) {
-		renderer.renderThread.surfaceCreated(holder)
+		renderer.renderThread.surfaceCreated(id, holder)
 	}
 }

@@ -31,15 +31,10 @@
 package org.godotengine.godot.render
 
 import android.annotation.SuppressLint
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.os.Build
-import android.text.TextUtils
-import android.util.SparseArray
+import android.graphics.PixelFormat
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.PointerIcon
-import androidx.annotation.Keep
 import org.godotengine.godot.Godot
 import org.godotengine.godot.GodotRenderView
 import org.godotengine.godot.input.GodotInputHandler
@@ -47,20 +42,22 @@ import org.godotengine.godot.input.GodotInputHandler
 internal class GodotVulkanRenderView(
 	private val godot: Godot,
 	renderer: GodotRenderer,
+	windowId: Int,
 	private val mInputHandler: GodotInputHandler,
 	shouldBeTranslucent: Boolean
 ) : VkSurfaceView(
 	godot.context,
 	renderer
 ), GodotRenderView {
-	private val customPointerIcons = SparseArray<PointerIcon>()
-
 	init {
+		super.setId(windowId)
+		mInputHandler.setupGestureDetectorsForId(getId())
+
 		pointerIcon = PointerIcon.getSystemIcon(context, PointerIcon.TYPE_DEFAULT)
 		isFocusableInTouchMode = true
 		isClickable = false
 		if (shouldBeTranslucent) {
-			this.getHolder().setFormat(PixelFormat.TRANSLUCENT)
+			this.holder.setFormat(PixelFormat.TRANSLUCENT)
 		}
 	}
 
@@ -68,10 +65,12 @@ internal class GodotVulkanRenderView(
 
 	override fun getInputHandler() = mInputHandler
 
+	override fun setId(id: Int) {}
+
 	@SuppressLint("ClickableViewAccessibility")
 	override fun onTouchEvent(event: MotionEvent): Boolean {
 		super.onTouchEvent(event)
-		return mInputHandler.onTouchEvent(event)
+		return mInputHandler.onTouchEvent(id, event)
 	}
 
 	override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
@@ -83,76 +82,28 @@ internal class GodotVulkanRenderView(
 	}
 
 	override fun onGenericMotionEvent(event: MotionEvent): Boolean {
-		return mInputHandler.onGenericMotionEvent(event) || super.onGenericMotionEvent(event)
+		return mInputHandler.onGenericMotionEvent(id, event) || super.onGenericMotionEvent(event)
 	}
 
 	override fun onCapturedPointerEvent(event: MotionEvent): Boolean {
-		return mInputHandler.onGenericMotionEvent(event)
+		return mInputHandler.onGenericMotionEvent(id, event)
 	}
 
 	override fun requestPointerCapture() {
-		if (canCapturePointer()) {
+		if (godot.canCapturePointer()) {
 			super.requestPointerCapture()
-			mInputHandler.onPointerCaptureChange(true)
+			mInputHandler.onPointerCaptureChange(id, true)
 		}
 	}
 
 	override fun releasePointerCapture() {
 		super.releasePointerCapture()
-		mInputHandler.onPointerCaptureChange(false)
+		mInputHandler.onPointerCaptureChange(id, false)
 	}
 
 	override fun onPointerCaptureChange(hasCapture: Boolean) {
 		super.onPointerCaptureChange(hasCapture)
-		mInputHandler.onPointerCaptureChange(hasCapture)
-	}
-
-	/**
-	 * Used to configure the PointerIcon for the given type.
-	 *
-	 * Called from JNI
-	 */
-	@Keep
-	override fun configurePointerIcon(
-		pointerType: Int,
-		imagePath: String,
-		hotSpotX: Float,
-		hotSpotY: Float
-	) {
-		try {
-			var bitmap: Bitmap? = null
-			if (!TextUtils.isEmpty(imagePath)) {
-				if (godot.directoryAccessHandler.filesystemFileExists(imagePath)) {
-					// Try to load the bitmap from the file system
-					bitmap = BitmapFactory.decodeFile(imagePath)
-				} else if (godot.directoryAccessHandler.assetsFileExists(imagePath)) {
-					// Try to load the bitmap from the assets directory
-					val am = context.assets
-					val imageInputStream = am.open(imagePath)
-					bitmap = BitmapFactory.decodeStream(imageInputStream)
-				}
-			}
-
-			if (bitmap != null) {
-				val customPointerIcon = PointerIcon.create(bitmap, hotSpotX, hotSpotY)
-				customPointerIcons.put(pointerType, customPointerIcon)
-			}
-		} catch (e: Exception) {
-			// Reset the custom pointer icon
-			customPointerIcons.delete(pointerType)
-		}
-	}
-
-	/**
-	 * called from JNI to change pointer icon
-	 */
-	@Keep
-	override fun setPointerIcon(pointerType: Int) {
-		var pointerIcon = customPointerIcons[pointerType]
-		if (pointerIcon == null) {
-			pointerIcon = PointerIcon.getSystemIcon(context, pointerType)
-		}
-		setPointerIcon(pointerIcon)
+		mInputHandler.onPointerCaptureChange(id, hasCapture)
 	}
 
 	override fun onResolvePointerIcon(me: MotionEvent, pointerIndex: Int): PointerIcon {
