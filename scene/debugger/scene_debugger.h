@@ -177,6 +177,8 @@ private:
 	inline static LiveEditor *singleton = nullptr;
 
 public:
+	String get_live_edit_scene() const { return live_edit_scene; }
+
 	static LiveEditor *get_singleton();
 };
 #endif // DEBUG_ENABLED

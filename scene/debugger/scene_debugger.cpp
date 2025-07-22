@@ -59,6 +59,9 @@
 
 #ifndef _3D_DISABLED
 #include "scene/3d/camera_3d.h"
+#ifndef XR_DISABLED
+#include "scene/3d/xr/xr_debugger.h"
+#endif
 #endif
 
 #ifdef DEBUG_ENABLED
@@ -79,6 +82,9 @@ SceneDebugger::SceneDebugger() {
 #ifdef DEBUG_ENABLED
 	LiveEditor::singleton = memnew(LiveEditor);
 	RuntimeNodeSelect::singleton = memnew(RuntimeNodeSelect);
+#ifndef XR_DISABLED
+	XRDebugger::singleton = memnew(XRDebugger);
+#endif // XR_DISABLED
 
 	EngineDebugger::register_message_capture("scene", EngineDebugger::Capture(nullptr, SceneDebugger::parse_message));
 #endif
@@ -96,6 +102,12 @@ SceneDebugger::~SceneDebugger() {
 		memdelete(RuntimeNodeSelect::singleton);
 		RuntimeNodeSelect::singleton = nullptr;
 	}
+#ifndef XR_DISABLED
+	if (XRDebugger::singleton) {
+		memdelete(XRDebugger::singleton);
+		XRDebugger::singleton = nullptr;
+	}
+#endif // XR_DISABLED
 #endif // DEBUG_ENABLED
 
 	singleton = nullptr;
@@ -205,6 +217,9 @@ void SceneDebugger::_on_output_max_linear_value_changed(float max_linear_value) 
 
 Error SceneDebugger::_msg_setup_scene(const Array &p_args) {
 	SceneTree::get_singleton()->get_root()->connect(SceneStringName(window_input), callable_mp_static(SceneDebugger::_handle_input).bind(DebuggerMarshalls::deserialize_key_shortcut(p_args)));
+#ifndef XR_DISABLED
+	XRDebugger::get_singleton()->initialize();
+#endif // XR_DISABLED
 	return OK;
 }
 
@@ -529,6 +544,9 @@ Error SceneDebugger::_msg_runtime_node_select_set_node_type(const Array &p_args)
 	ERR_FAIL_COND_V(p_args.is_empty(), ERR_INVALID_DATA);
 	RuntimeNodeSelect::NodeType type = (RuntimeNodeSelect::NodeType)p_args[0];
 	RuntimeNodeSelect::get_singleton()->_set_node_type(type);
+#ifndef XR_DISABLED
+	XRDebugger::get_singleton()->set_enabled(type == RuntimeNodeSelect::NODE_TYPE_3D);
+#endif // XR_DISABLED
 	return OK;
 }
 
