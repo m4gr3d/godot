@@ -339,7 +339,8 @@ void FileSystemDock::_create_tree(TreeItem *p_parent, EditorFileSystemDirectory 
 			if (main_scene == file_metadata) {
 				file_item->set_custom_color(0, get_theme_color(SNAME("accent_color"), EditorStringName(Editor)));
 			}
-			EditorResourcePreview::get_singleton()->queue_resource_preview(file_metadata, callable_mp(this, &FileSystemDock::_tree_thumbnail_done).bind(tree_update_id, file_item->get_instance_id()));
+			// TODO: Investigate the memory link when the project has a lot of assets.
+			//			EditorResourcePreview::get_singleton()->queue_resource_preview(file_metadata, callable_mp(this, &FileSystemDock::_tree_thumbnail_done).bind(tree_update_id, file_item->get_instance_id()));
 		}
 	} else {
 		if (lpath.get_base_dir() == current_path.get_base_dir()) {
