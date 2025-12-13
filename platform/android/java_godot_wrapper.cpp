@@ -77,7 +77,6 @@ GodotJavaWrapper::GodotJavaWrapper(JNIEnv *p_env, jobject p_godot_native_bridge)
 	_on_godot_main_loop_started = p_env->GetMethodID(godot_native_bridge_class, "onGodotMainLoopStarted", "()V");
 	_on_godot_terminating = p_env->GetMethodID(godot_native_bridge_class, "onGodotTerminating", "()V");
 	_create_new_godot_instance = p_env->GetMethodID(godot_native_bridge_class, "createNewGodotInstance", "([Ljava/lang/String;)I");
-	_get_render_view = p_env->GetMethodID(godot_native_bridge_class, "getRenderView", "()Lorg/godotengine/godot/GodotRenderView;");
 	_begin_benchmark_measure = p_env->GetMethodID(godot_native_bridge_class, "nativeBeginBenchmarkMeasure", "(Ljava/lang/String;Ljava/lang/String;)V");
 	_end_benchmark_measure = p_env->GetMethodID(godot_native_bridge_class, "nativeEndBenchmarkMeasure", "(Ljava/lang/String;Ljava/lang/String;)V");
 	_dump_benchmark = p_env->GetMethodID(godot_native_bridge_class, "nativeDumpBenchmark", "(Ljava/lang/String;)V");
@@ -103,13 +102,23 @@ GodotJavaWrapper::GodotJavaWrapper(JNIEnv *p_env, jobject p_godot_native_bridge)
 	_enter_pip_mode = p_env->GetMethodID(godot_native_bridge_class, "nativeEnterPiPMode", "()V");
 	_set_pip_mode_aspect_ratio = p_env->GetMethodID(godot_native_bridge_class, "nativeSetPiPModeAspectRatio", "(II)V");
 	_set_auto_enter_pip_mode_on_background = p_env->GetMethodID(godot_native_bridge_class, "nativeSetAutoEnterPiPModeOnBackground", "(Z)V");
+
+	_can_capture_pointer = p_env->GetMethodID(godot_native_bridge_class, "canCapturePointer", "()Z");
+	_configure_pointer_icon = p_env->GetMethodID(godot_native_bridge_class, "configurePointerIcon", "(ILjava/lang/String;FF)V");
+	_set_pointer_icon = p_env->GetMethodID(godot_native_bridge_class, "setPointerIcon", "(I)V");
+
+	int android_device_api_level = android_get_device_api_level();
+	if (android_device_api_level >= __ANDROID_API_O__) {
+		_request_pointer_capture = p_env->GetMethodID(godot_native_bridge_class, "requestPointerCapture", "()V");
+		_release_pointer_capture = p_env->GetMethodID(godot_native_bridge_class, "releasePointerCapture", "()V");
+	}
+
+	_make_gl_window_current = p_env->GetMethodID(godot_native_bridge_class, "makeGLWindowCurrent", "(I)Z");
+	_egl_swap_buffers = p_env->GetMethodID(godot_native_bridge_class, "eglSwapBuffers", "(I)V");
+	_release_current_gl_window = p_env->GetMethodID(godot_native_bridge_class, "releaseCurrentGLWindow", "(I)V");
 }
 
 GodotJavaWrapper::~GodotJavaWrapper() {
-	if (godot_view) {
-		delete godot_view;
-	}
-
 	JNIEnv *env = get_jni_env();
 	ERR_FAIL_NULL(env);
 	env->DeleteGlobalRef(godot_native_bridge);
@@ -124,21 +133,6 @@ jobject GodotJavaWrapper::get_activity() {
 		return activity;
 	}
 	return nullptr;
-}
-
-GodotJavaViewWrapper *GodotJavaWrapper::get_godot_view() {
-	if (godot_view != nullptr) {
-		return godot_view;
-	}
-	if (_get_render_view) {
-		JNIEnv *env = get_jni_env();
-		ERR_FAIL_NULL_V(env, nullptr);
-		jobject godot_render_view = env->CallObjectMethod(godot_native_bridge, _get_render_view);
-		if (!env->IsSameObject(godot_render_view, nullptr)) {
-			godot_view = new GodotJavaViewWrapper(godot_render_view);
-		}
-	}
-	return godot_view;
 }
 
 void GodotJavaWrapper::on_godot_setup_completed(JNIEnv *p_env) {
@@ -754,5 +748,84 @@ void GodotJavaWrapper::set_auto_enter_pip_mode_on_background(bool p_auto_enter_o
 		JNIEnv *env = get_jni_env();
 		ERR_FAIL_NULL(env);
 		env->CallVoidMethod(godot_native_bridge, _set_auto_enter_pip_mode_on_background, p_auto_enter_on_background);
+	}
+}
+
+bool GodotJavaWrapper::can_capture_pointer() const {
+	// We can capture the pointer if the other jni capture method ids are initialized,
+	// and GodotView#canCapturePointer() returns true.
+	if (_request_pointer_capture != nullptr && _release_pointer_capture != nullptr && _can_capture_pointer != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL_V(env, false);
+
+		return env->CallBooleanMethod(godot_native_bridge, _can_capture_pointer);
+	}
+
+	return false;
+}
+
+void GodotJavaWrapper::request_pointer_capture() {
+	if (_request_pointer_capture != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_native_bridge, _request_pointer_capture);
+	}
+}
+
+void GodotJavaWrapper::release_pointer_capture() {
+	if (_release_pointer_capture != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_native_bridge, _release_pointer_capture);
+	}
+}
+
+void GodotJavaWrapper::configure_pointer_icon(int pointer_type, const String &image_path, const Vector2 &p_hotspot) {
+	if (_configure_pointer_icon != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		jstring jImagePath = env->NewStringUTF(image_path.utf8().get_data());
+		env->CallVoidMethod(godot_native_bridge, _configure_pointer_icon, pointer_type, jImagePath, p_hotspot.x, p_hotspot.y);
+		env->DeleteLocalRef(jImagePath);
+	}
+}
+
+void GodotJavaWrapper::set_pointer_icon(int pointer_type) {
+	if (_set_pointer_icon != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_native_bridge, _set_pointer_icon, pointer_type);
+	}
+}
+
+bool GodotJavaWrapper::make_gl_window_current(DisplayServerEnums::WindowID p_window_id) {
+	if (_make_gl_window_current != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL_V(env, false);
+
+		return env->CallBooleanMethod(godot_native_bridge, _make_gl_window_current, p_window_id);
+	}
+	return false;
+}
+
+void GodotJavaWrapper::egl_swap_buffers(DisplayServerEnums::WindowID p_window_id) {
+	if (_egl_swap_buffers != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_native_bridge, _egl_swap_buffers, p_window_id);
+	}
+}
+
+void GodotJavaWrapper::release_current_gl_window(DisplayServerEnums::WindowID p_window_id) {
+	if (_release_current_gl_window != nullptr) {
+		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
+		env->CallVoidMethod(godot_native_bridge, _release_current_gl_window, p_window_id);
 	}
 }

@@ -64,6 +64,8 @@ import org.godotengine.godot.nativeapi.GodotNativeBridge
 import org.godotengine.godot.plugin.AndroidRuntimePlugin
 import org.godotengine.godot.plugin.GodotPlugin
 import org.godotengine.godot.plugin.GodotPluginRegistry
+import org.godotengine.godot.render.GodotRenderer
+import org.godotengine.godot.render.Renderer
 import org.godotengine.godot.tts.GodotTTS
 import org.godotengine.godot.utils.GodotNetUtils
 import org.godotengine.godot.utils.PermissionsUtil
@@ -126,6 +128,8 @@ class Godot private constructor(val context: Context) {
 	}
 
 	private val godotNativeBridge = GodotNativeBridge(this)
+
+	internal lateinit var renderer: GodotRenderer
 
 	private val mSensorManager: SensorManager? by lazy { context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager }
 	private val mClipboard: ClipboardManager? by lazy { context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager }
@@ -214,7 +218,7 @@ class Godot private constructor(val context: Context) {
 	/**
 	 * Returns true if the native engine has been initialized through [initEngine], false otherwise.
 	 */
-	private fun isNativeInitialized() = nativeLayerInitializeCompleted && nativeLayerSetupCompleted
+	private fun isNativeInitialized() = nativeLayerInitializeCompleted && nativeLayerSetupCompleted && ::renderer.isInitialized
 
 	/**
 	 * Returns true if the engine has been initialized, false otherwise.
@@ -225,6 +229,11 @@ class Godot private constructor(val context: Context) {
 	 * Provides access to the primary host [Activity].
 	 */
 	fun getActivity() = primaryHost?.activity
+
+	/**
+	 * Provides access to the Godot [Renderer].
+	 */
+	fun getRenderer(): Renderer = renderer
 
 	/**
 	 * Start initialization of the Godot engine.
@@ -336,6 +345,21 @@ class Godot private constructor(val context: Context) {
 					Log.v(TAG, "Godot native layer setup completed")
 				}
 			}
+
+			val nativeRenderer = getNativeRenderer()
+			val useVulkan = when (nativeRenderer) {
+				"vulkan" -> {
+					true
+				}
+				"opengl3" -> {
+					false
+				}
+				else -> {
+					throw IllegalStateException("No native renderer is available.")
+				}
+			}
+			renderer = GodotRenderer(useVulkan)
+			renderer.startRenderer()
 		} finally {
 			endBenchmarkMeasure("Startup", "Godot::initEngine")
 		}
@@ -534,18 +558,13 @@ class Godot private constructor(val context: Context) {
 					!isEditorHint() &&
 					java.lang.Boolean.parseBoolean(GodotLib.getGlobal("display/window/per_pixel_transparency/allowed"))
 			Log.d(TAG, "Render view should be transparent: $shouldBeTransparent")
-
-			val nativeRenderer = getNativeRenderer()
-			if (nativeRenderer == "vulkan") {
-				renderView = GodotVulkanRenderView(this, godotInputHandler, shouldBeTransparent)
-			} else if (nativeRenderer == "opengl3") {
-				renderView = GodotGLRenderView(this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent)
+			renderView = if (renderer.useVulkan) {
+				GodotVulkanRenderView(this, renderer, godotInputHandler, shouldBeTransparent)
 			} else {
-				throw IllegalStateException("No native renderer is available.")
+				GodotGLRenderView(this, renderer, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent)
 			}
 
 			renderView?.let {
-				it.startRenderer()
 				containerLayout?.addView(
 					it.view,
 					ViewGroup.LayoutParams(
@@ -611,7 +630,7 @@ class Godot private constructor(val context: Context) {
 				}
 			})
 
-			renderView?.queueOnRenderThread {
+			runOnRenderThread {
 				for (plugin in pluginRegistry.allPlugins) {
 					// Plugins should be registered early so they are available as soon as the app starts.
 					// Otherwise, a delay in registration may make them unavailable during _init() of the main script or an autoload.
@@ -649,7 +668,7 @@ class Godot private constructor(val context: Context) {
 			return
 		}
 
-		renderView?.onActivityStarted()
+		renderer.onActivityStarted()
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainStart()
 		}
@@ -662,7 +681,7 @@ class Godot private constructor(val context: Context) {
 			return
 		}
 
-		renderView?.onActivityResumed()
+		renderer.onActivityResumed()
 		registerSensorsIfNeeded()
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainResume()
@@ -705,7 +724,7 @@ class Godot private constructor(val context: Context) {
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainPause()
 		}
-		renderView?.onActivityPaused()
+		renderer.onActivityPaused()
 		mSensorManager?.unregisterListener(godotInputHandler)
 	}
 
@@ -718,7 +737,7 @@ class Godot private constructor(val context: Context) {
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainStop()
 		}
-		renderView?.onActivityStopped()
+		renderer.onActivityStopped()
 	}
 
 	fun onDestroy(primaryHost: GodotHost) {
@@ -727,17 +746,27 @@ class Godot private constructor(val context: Context) {
 		}
 		Log.v(TAG, "OnDestroy: $primaryHost")
 
+		// If the host activity is being destroyed because it's changing configurations, it'll be recreated, so we keep
+		// the engine around to continue where we left off.
+		val isHostChangingConfigurations = primaryHost.activity?.isChangingConfigurations == true
+		if (!isHostChangingConfigurations) {
+			destroyEngine()
+		}
+		this.primaryHost = null
+	}
+
+	private fun destroyEngine() {
+		Log.d(TAG, "Destroying Godot Engine")
+
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainDestroy()
 		}
 
-		if (renderView?.blockingExitRenderer(EXIT_RENDERER_TIMEOUT_IN_MS) != true) {
+		if (!renderer.blockingExitRenderer(EXIT_RENDERER_TIMEOUT_IN_MS)) {
 			Log.w(TAG, "Unable to exit the renderer within $EXIT_RENDERER_TIMEOUT_IN_MS ms... Force quitting the process.")
 			onGodotTerminating()
 			forceQuit(0)
 		}
-
-		this.primaryHost = null
 	}
 
 	/**
@@ -896,7 +925,7 @@ class Godot private constructor(val context: Context) {
 	 * This must be called after the render thread has started.
 	 */
 	fun runOnRenderThread(action: Runnable) {
-		renderView?.queueOnRenderThread(action)
+		renderer.queueOnRenderThread(action)
 	}
 
 	/**
@@ -1001,7 +1030,7 @@ class Godot private constructor(val context: Context) {
 		runOnTerminate.set(destroyRunnable)
 
 		runOnHostThread {
-			onDestroy(host)
+			destroyEngine()
 		}
 	}
 

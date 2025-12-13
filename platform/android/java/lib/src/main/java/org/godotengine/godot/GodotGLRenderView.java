@@ -31,8 +31,8 @@
 package org.godotengine.godot;
 
 import org.godotengine.godot.gl.GLSurfaceView;
-import org.godotengine.godot.gl.GodotRenderer;
 import org.godotengine.godot.input.GodotInputHandler;
+import org.godotengine.godot.render.GodotRenderer;
 import org.godotengine.godot.xr.XRMode;
 import org.godotengine.godot.xr.ovr.OvrConfigChooser;
 import org.godotengine.godot.xr.ovr.OvrContextFactory;
@@ -81,57 +81,19 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 	private final GodotRenderer godotRenderer;
 	private final SparseArray<PointerIcon> customPointerIcons = new SparseArray<>();
 
-	public GodotGLRenderView(Godot godot, GodotInputHandler inputHandler, XRMode xrMode, boolean useDebugOpengl, boolean shouldBeTranslucent) {
+	public GodotGLRenderView(Godot godot, GodotRenderer renderer, GodotInputHandler inputHandler, XRMode xrMode, boolean useDebugOpengl, boolean shouldBeTranslucent) {
 		super(godot.getContext());
 
 		this.godot = godot;
 		this.inputHandler = inputHandler;
-		this.godotRenderer = new GodotRenderer();
+		this.godotRenderer = renderer;
 		setPointerIcon(PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_DEFAULT));
-		init(xrMode, shouldBeTranslucent, useDebugOpengl);
+		init(xrMode, renderer, shouldBeTranslucent, useDebugOpengl);
 	}
 
 	@Override
 	public SurfaceView getView() {
 		return this;
-	}
-
-	@Override
-	public void queueOnRenderThread(Runnable event) {
-		queueEvent(event);
-	}
-
-	@Override
-	public void onActivityPaused() {
-		queueEvent(() -> {
-			GodotLib.focusout();
-			// Pause the renderer
-			godotRenderer.onActivityPaused();
-		});
-	}
-
-	@Override
-	public void onActivityStopped() {
-		pauseGLThread();
-	}
-
-	@Override
-	public void onActivityResumed() {
-		queueEvent(() -> {
-			// Resume the renderer
-			godotRenderer.onActivityResumed();
-			GodotLib.focusin();
-		});
-	}
-
-	@Override
-	public void onActivityStarted() {
-		resumeGLThread();
-	}
-
-	@Override
-	public boolean blockingExitRenderer(long blockingTimeInMs) {
-		return requestRenderThreadExitAndWait(blockingTimeInMs);
 	}
 
 	@Override
@@ -240,7 +202,7 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 		return getPointerIcon();
 	}
 
-	private void init(XRMode xrMode, boolean translucent, boolean useDebugOpengl) {
+	private void init(XRMode xrMode, GodotRenderer renderer, boolean translucent, boolean useDebugOpengl) {
 		setPreserveEGLContextOnPause(true);
 		setFocusableInTouchMode(true);
 		switch (xrMode) {
@@ -282,11 +244,7 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 								new RegularConfigChooser(8, 8, 8, 8, 16, 0)));
 				break;
 		}
-	}
 
-	@Override
-	public void startRenderer() {
-		/* Set the renderer responsible for frame rendering */
-		setRenderer(godotRenderer);
+		setRenderer(renderer);
 	}
 }

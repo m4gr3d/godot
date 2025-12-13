@@ -36,12 +36,17 @@ import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.text.TextUtils
 import android.util.Log
 import android.util.Rational
+import android.util.SparseArray
 import android.util.TypedValue
+import android.view.PointerIcon
 import androidx.annotation.Keep
 import androidx.core.net.toUri
 import org.godotengine.godot.Godot
@@ -71,6 +76,7 @@ internal class GodotNativeBridge(private val godot: Godot) {
 
 	}
 
+	private val customPointerIcons = SparseArray<PointerIcon>()
 	private val vibratorService: Vibrator? by lazy { godot.context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
 
 	/**
@@ -431,5 +437,91 @@ internal class GodotNativeBridge(private val godot: Godot) {
 				hostActivity.updatePiPParams(enableAutoEnter = autoEnterPiPOnBackground)
 			}
 		}
+	}
+
+	/**
+	 * @return true if pointer capture is supported.
+	 */
+	@Keep
+	private fun canCapturePointer(): Boolean {
+		// Pointer capture is not supported on native XR devices.
+		return !godot.isXrRuntime && godot.godotInputHandler.canCapturePointer()
+	}
+
+	@Keep
+	private fun requestPointerCapture() {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			godot.renderView?.view?.requestPointerCapture()
+		}
+	}
+
+	@Keep
+	private fun releasePointerCapture() {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			godot.renderView?.view?.releasePointerCapture()
+		}
+	}
+
+	/**
+	 * Used to configure the PointerIcon for the given type.
+	 *
+	 * Called from JNI
+	 */
+	@Keep
+	private fun configurePointerIcon(
+		pointerType: Int,
+		imagePath: String,
+		hotSpotX: Float,
+		hotSpotY: Float
+	) {
+		try {
+			var bitmap: Bitmap? = null
+			if (!TextUtils.isEmpty(imagePath)) {
+				if (godot.directoryAccessHandler.filesystemFileExists(imagePath)) {
+					// Try to load the bitmap from the file system
+					bitmap = BitmapFactory.decodeFile(imagePath)
+				} else if (godot.directoryAccessHandler.assetsFileExists(imagePath)) {
+					// Try to load the bitmap from the assets directory
+					val am = godot.context.assets
+					val imageInputStream = am.open(imagePath)
+					bitmap = BitmapFactory.decodeStream(imageInputStream)
+				}
+			}
+
+			if (bitmap != null) {
+				val customPointerIcon = PointerIcon.create(bitmap, hotSpotX, hotSpotY)
+				customPointerIcons.put(pointerType, customPointerIcon)
+			}
+		} catch (e: Exception) {
+			// Reset the custom pointer icon
+			customPointerIcons.delete(pointerType)
+		}
+	}
+
+	/**
+	 * Called from JNI to change pointer icon
+	 */
+	@Keep
+	private fun setPointerIcon(pointerType: Int) {
+		var pointerIcon = customPointerIcons[pointerType]
+		if (pointerIcon == null) {
+			pointerIcon = PointerIcon.getSystemIcon(godot.context, pointerType)
+		}
+		godot.renderView?.view?.pointerIcon = pointerIcon
+	}
+
+	@Keep
+	private fun makeGLWindowCurrent(windowId: Int): Boolean {
+		return godot.renderer.renderThread.makeEglCurrent(windowId)
+	}
+
+	@Keep
+	private fun eglSwapBuffers(windowId: Int) {
+		godot.renderer.renderThread.eglSwapBuffers(windowId)
+	}
+
+	@Keep
+	private fun releaseCurrentGLWindow(windowId: Int) {
+		godot.renderer.renderThread.releaseCurrentGLWindow(windowId)
 	}
 }
