@@ -32,6 +32,8 @@ package org.godotengine.godot.xr.ovr;
 
 import org.godotengine.godot.gl.GLSurfaceView;
 
+import android.view.SurfaceHolder;
+
 import javax.microedition.khronos.egl.EGL10;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.EGLDisplay;
@@ -48,13 +50,7 @@ public class OvrWindowSurfaceFactory implements GLSurfaceView.EGLWindowSurfaceFa
 	};
 
 	@Override
-	public EGLSurface createWindowSurface(EGL10 egl, EGLDisplay display, EGLConfig config,
-			Object nativeWindow) {
+	public EGLSurface createWindowSurface(EGL10 egl, EGLDisplay display, EGLConfig config, SurfaceHolder surfaceHolder) {
 		return egl.eglCreatePbufferSurface(display, config, SURFACE_ATTRIBS);
-	}
-
-	@Override
-	public void destroySurface(EGL10 egl, EGLDisplay display, EGLSurface surface) {
-		egl.eglDestroySurface(display, surface);
 	}
 }

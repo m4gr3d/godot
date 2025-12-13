@@ -30,12 +30,13 @@
 
 #pragma once
 
-#include "java_godot_view_wrapper.h"
+#include "jni_utils.h"
 
 #include "core/math/color.h"
 #include "core/templates/list.h"
 #include "core/templates/vector.h"
 #include "core/variant/callable.h"
+#include "servers/display/display_server.h"
 
 #include <jni.h>
 
@@ -44,8 +45,6 @@ class GodotJavaWrapper {
 private:
 	jobject godot_instance;
 	jclass godot_class;
-
-	GodotJavaViewWrapper *godot_view = nullptr;
 
 	jmethodID _restart = nullptr;
 	jmethodID _finish = nullptr;
@@ -73,7 +72,6 @@ private:
 	jmethodID _on_godot_main_loop_started = nullptr;
 	jmethodID _on_godot_terminating = nullptr;
 	jmethodID _create_new_godot_instance = nullptr;
-	jmethodID _get_render_view = nullptr;
 	jmethodID _begin_benchmark_measure = nullptr;
 	jmethodID _end_benchmark_measure = nullptr;
 	jmethodID _dump_benchmark = nullptr;
@@ -96,14 +94,20 @@ private:
 	jmethodID _enter_pip_mode = nullptr;
 	jmethodID _set_pip_mode_aspect_ratio = nullptr;
 	jmethodID _set_auto_enter_pip_mode_on_background = nullptr;
+	jmethodID _can_capture_pointer = nullptr;
+	jmethodID _request_pointer_capture = nullptr;
+	jmethodID _release_pointer_capture = nullptr;
+	jmethodID _configure_pointer_icon = nullptr;
+	jmethodID _set_pointer_icon = nullptr;
+	jmethodID _make_gl_window_current = nullptr;
+	jmethodID _egl_swap_buffers = nullptr;
+	jmethodID _release_current_gl_window = nullptr;
 
 public:
 	GodotJavaWrapper(JNIEnv *p_env, jobject p_godot_instance);
 	~GodotJavaWrapper();
 
 	jobject get_activity();
-
-	GodotJavaViewWrapper *get_godot_view();
 
 	void on_godot_setup_completed(JNIEnv *p_env = nullptr);
 	void on_godot_main_loop_started(JNIEnv *p_env = nullptr);
@@ -166,4 +170,14 @@ public:
 	void enter_pip_mode();
 	void set_pip_mode_aspect_ratio(int p_numerator, int p_denominator);
 	void set_auto_enter_pip_mode_on_background(bool p_auto_enter_on_background);
+
+	bool can_capture_pointer() const;
+	void request_pointer_capture();
+	void release_pointer_capture();
+	void configure_pointer_icon(int pointer_type, const String &image_path, const Vector2 &p_hotspot);
+	void set_pointer_icon(int pointer_type);
+
+	bool make_gl_window_current(DisplayServerEnums::WindowID p_window_id);
+	void egl_swap_buffers(DisplayServerEnums::WindowID p_window_id);
+	void release_current_gl_window(DisplayServerEnums::WindowID p_window_id);
 };
