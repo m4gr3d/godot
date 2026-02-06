@@ -64,6 +64,8 @@
 #include "main/main_timer_sync.h"
 #include "main/performance.h"
 #include "main/splash.gen.h"
+#include "modules/register_module_types.h"
+#include "platform/register_platform_apis.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
 #include "scene/property_list_helper.h"
@@ -4558,6 +4560,7 @@ int Main::start() {
 				for (Node *E : to_add) {
 					sml->get_root()->add_child(E);
 				}
+
 				OS::get_singleton()->benchmark_end_measure("Startup", "Load Autoloads");
 			}
 		}
