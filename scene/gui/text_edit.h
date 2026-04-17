@@ -301,6 +301,19 @@ private:
 	bool alt_start_no_hold = false;
 	uint32_t alt_code = 0;
 
+	enum SelectionHandleDragType {
+		SELECTION_HANDLE_NONE,
+		SELECTION_HANDLE_START,
+		SELECTION_HANDLE_END
+	};
+
+	SelectionHandleDragType selection_handle_drag_type = SELECTION_HANDLE_NONE;
+	float selection_handle_radius;
+	int dragging_caret_index = -1;
+	bool show_selection_handle = false;
+	Array _get_selection_handles_pos(int p_cursor) const;
+	void _draw_selection_handle(Vector2 p_pos) const;
+
 	bool tab_input_mode = true;
 
 	// Text properties.

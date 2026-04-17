@@ -1955,6 +1955,25 @@ void TextEdit::_notification(int p_what) {
 				}
 			}
 
+			// Selection handles.
+			if (show_selection_handle) {
+				for (int c = 0; c < get_caret_count(); c++) {
+					if (!has_selection(c)) {
+						continue;
+					}
+
+					Array handles_pos = _get_selection_handles_pos(c);
+					Point2i start_pos = handles_pos[0];
+					Point2i end_pos = handles_pos[1];
+					if (start_pos.x != -1) {
+						_draw_selection_handle(start_pos);
+					}
+					if (end_pos.x != -1) {
+						_draw_selection_handle(end_pos);
+					}
+				}
+			}
+
 			if (has_focus()) {
 				_update_ime_window_position();
 			}
@@ -2056,6 +2075,44 @@ void TextEdit::_notification(int p_what) {
 			}
 		} break;
 	}
+}
+
+void TextEdit::_draw_selection_handle(Vector2 p_pos) const {
+	Color handle_color = theme_cache.caret_color;
+	int line_height = get_line_height();
+
+	int handle_line_width = theme_cache.caret_width * MAX(1, theme_cache.base_scale);
+	RS::get_singleton()->canvas_item_add_line(text_ci, p_pos, p_pos + Vector2(0, line_height), handle_color, handle_line_width);
+
+	Vector2 circle_center = p_pos + Vector2(0, line_height + selection_handle_radius);
+	RS::get_singleton()->canvas_item_add_circle(text_ci, circle_center, selection_handle_radius, handle_color);
+}
+
+Array TextEdit::_get_selection_handles_pos(int p_cursor) const {
+	int selection_from_line = get_selection_from_line(p_cursor);
+	int selection_from_column = get_selection_from_column(p_cursor);
+	int selection_to_line = get_selection_to_line(p_cursor);
+	int selection_to_column = get_selection_to_column(p_cursor);
+	//print_line(vformat("selection_from_line %d | selection_from_column %d | selection_to_line %d | selection_to_column %d", selection_from_line, selection_from_column, selection_to_line, selection_to_column));
+	Rect2i start_rect = get_rect_at_line_column(selection_from_line, selection_from_column);
+	Rect2i end_rect = get_rect_at_line_column(selection_to_line, selection_to_column);
+
+	Point2i start_pos = start_rect.position;
+	if (start_pos.x != -1 && selection_from_column > 0) {
+		start_pos.x += start_rect.size.x;
+	}
+
+	Point2i end_pos = end_rect.position;
+	print_line(vformat("selection_from_line | end_pos %d | end_size %d", end_pos.x, end_rect.size.x));
+	if (end_rect.position.x != -1 && selection_to_column > 0) {
+		end_pos.x += end_rect.size.x;
+	}
+
+	Array result;
+	result.resize(2);
+	result[0] = start_pos;
+	result[1] = end_pos;
+	return result;
 }
 
 void TextEdit::unhandled_key_input(const Ref<InputEvent> &p_event) {
@@ -2261,6 +2318,8 @@ void TextEdit::gui_input(const Ref<InputEvent> &p_gui_input) {
 	Ref<InputEventMouseButton> mb = p_gui_input;
 
 	if (mb.is_valid() && event_device_id != InputEvent::DEVICE_ID_EMULATION) {
+		show_selection_handle = false; // Hiding selection handle because mouse is used.
+
 		Vector2i mpos = mb->get_position();
 		if (is_layout_rtl()) {
 			mpos.x = get_size().x - mpos.x;
@@ -2518,6 +2577,43 @@ void TextEdit::gui_input(const Ref<InputEvent> &p_gui_input) {
 
 	Ref<InputEventScreenTouch> touch = p_gui_input;
 	if (touch.is_valid() && event_device_id != InputEvent::DEVICE_ID_EMULATION) {
+		show_selection_handle = true; // Showing selection handle because native touch input is used.
+
+		// Prioritizing selection handle input
+		if (touch->is_pressed()) {
+			for (int c = 0; c < get_caret_count(); c++) {
+				if (!has_selection(c)) {
+					continue;
+				}
+
+				Array handles_pos = _get_selection_handles_pos(c);
+				Point2i start_pos = handles_pos[0];
+				Point2i end_pos = handles_pos[1];
+
+				int line_height = get_line_height();
+
+				if (touch->get_position().distance_to(start_pos + Vector2(0, line_height + selection_handle_radius)) < selection_handle_radius * 2) {
+					selection_handle_drag_type = SELECTION_HANDLE_START;
+					dragging_caret_index = c;
+					accept_event();
+					return; // Return early to block default touch logic
+				}
+				if (touch->get_position().distance_to(end_pos + Vector2(0, line_height + selection_handle_radius)) < selection_handle_radius * 2) {
+					selection_handle_drag_type = SELECTION_HANDLE_END;
+					dragging_caret_index = c;
+					accept_event();
+					return;
+				}
+			}
+		}
+
+		if (touch->is_released() && selection_handle_drag_type != SELECTION_HANDLE_NONE) {
+			selection_handle_drag_type = SELECTION_HANDLE_NONE;
+			dragging_caret_index = -1;
+			accept_event();
+			return;
+		}
+
 		if (touch->is_pressed() && !touch->is_double_tap()) {
 			// We treat a single touch press event as the initiation of touch dragging.
 			touch_dragging_starting = true;
@@ -2658,6 +2754,25 @@ void TextEdit::gui_input(const Ref<InputEvent> &p_gui_input) {
 
 	Ref<InputEventScreenDrag> drag = p_gui_input;
 	if (drag.is_valid() && event_device_id != InputEvent::DEVICE_ID_EMULATION) {
+		show_selection_handle = true; // Showing selection handle because native touch input is used.
+
+		if (selection_handle_drag_type != SELECTION_HANDLE_NONE) {
+			Point2i pos = get_line_column_at_pos(drag->get_position());
+			int c = dragging_caret_index;
+
+			if (selection_handle_drag_type == SELECTION_HANDLE_START) {
+				select(pos.y, pos.x, get_caret_line(c), get_caret_column(c), c);
+			} else {
+				int ol = get_selection_from_line(c);
+				int oc = get_selection_from_column(c);
+				select(ol, oc, pos.y, pos.x, c);
+			}
+
+			queue_redraw();
+			accept_event();
+			return;
+		}
+
 		if (touch_dragging_starting) {
 			// Follow up from a single tap touch event handled above; we perform touch dragging.
 			touch_dragging_in_progress = true;
@@ -3574,6 +3689,8 @@ void TextEdit::_update_theme_item_cache() {
 	if (text.get_line_height() + theme_cache.line_spacing < 1) {
 		WARN_PRINT("Line height is too small, please increase font_size and/or line_spacing");
 	}
+
+	selection_handle_radius = 10.0 * theme_cache.base_scale;
 }
 
 void TextEdit::_update_caches(bool p_invalidate_all) {
