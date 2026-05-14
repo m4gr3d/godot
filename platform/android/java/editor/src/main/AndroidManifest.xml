@@ -58,7 +58,7 @@
         <activity
             android:name=".GodotEditor"
             android:configChanges="layoutDirection|locale|orientation|keyboardHidden|screenSize|smallestScreenSize|density|keyboard|navigation|screenLayout|uiMode"
-            android:exported="false"
+            android:exported="true"
             android:icon="@mipmap/themed_icon"
             android:launchMode="singleInstancePerTask"
             android:screenOrientation="userLandscape">

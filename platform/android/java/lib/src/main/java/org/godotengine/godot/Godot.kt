@@ -78,6 +78,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.FutureTask
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.function.Consumer
 
 /**
  * Core component used to interface with the native layer of the engine.
@@ -142,6 +143,17 @@ class Godot private constructor(val context: Context) {
 
 	private val gyroscopeEnabled = AtomicBoolean(false)
 	private val mGyroscope: Sensor? by lazy { mSensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE) }
+
+	private val hdrSdrRatioListener: Consumer<Display> by lazy {
+		Consumer<Display> { changedDisplay ->
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+				GodotLib.onHdrSdrRatioChanged(changedDisplay.hdrSdrRatio)
+
+				Log.d(TAG, "FHK - HDR SDR ratio changed: ${changedDisplay.hdrSdrRatio}")
+				Log.d(TAG, "FHK - HDR capabilities: ${changedDisplay.hdrCapabilities}")
+			}
+		}
+	}
 
 	val isXrRuntime: Boolean by lazy { hasFeature("xr_runtime") }
 
@@ -670,6 +682,7 @@ class Godot private constructor(val context: Context) {
 
 		renderView?.onActivityResumed()
 		registerSensorsIfNeeded()
+		registerHdrSdrRatioListenerIfNeeded()
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainResume()
 		}
@@ -713,6 +726,7 @@ class Godot private constructor(val context: Context) {
 		}
 		renderView?.onActivityPaused()
 		mSensorManager?.unregisterListener(godotInputHandler)
+		unregisterHdrSdrRatioListenerIfNeeded()
 	}
 
 	fun onStop(host: GodotHost) {
@@ -848,6 +862,7 @@ class Godot private constructor(val context: Context) {
 
 		runOnHostThread {
 			registerSensorsIfNeeded()
+			registerHdrSdrRatioListenerIfNeeded()
 		}
 
 		for (plugin in pluginRegistry.allPlugins) {
@@ -1061,5 +1076,32 @@ class Godot private constructor(val context: Context) {
 	 */
 	fun hasFeature(feature: String): Boolean {
 		return GodotLib.hasFeature(feature)
+	}
+
+	private fun registerHdrSdrRatioListenerIfNeeded() {
+		if (!resumed || runStatus != RunStatus.STARTED) {
+			return
+		}
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+			val display = getActivity()?.display ?: context.display
+			Log.d(TAG, "FHK - Current HDR SDR ratio: ${display.hdrSdrRatio}")
+			Log.d(TAG, "FHK - Hdr capabilities: ${display.hdrCapabilities}")
+			if (display.isHdrSdrRatioAvailable) {
+				Log.d(TAG, "FHK - Registering hdr sdr ratio listener...")
+				display.registerHdrSdrRatioChangedListener(
+					{ runnable -> runOnHostThread(runnable) },
+					hdrSdrRatioListener
+				)
+			}
+		}
+	}
+
+	private fun unregisterHdrSdrRatioListenerIfNeeded() {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+			val display = getActivity()?.display ?: context.display
+			Log.d(TAG, "FHK - Unregistering hdr sdr ratio listener...")
+			display.unregisterHdrSdrRatioChangedListener(hdrSdrRatioListener)
+		}
 	}
 }

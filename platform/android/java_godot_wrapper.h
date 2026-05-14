@@ -39,6 +39,12 @@
 
 #include <jni.h>
 
+struct AndroidHdrCapabilities {
+	bool hdr_supported = false;
+	float max_luminance = 0.0f;
+	float hdr_sdr_ratio = 1.0f;
+};
+
 // Class that makes functions in java/src/org/godotengine/godot/Godot.kt callable from C++
 class GodotJavaWrapper {
 private:
@@ -96,6 +102,9 @@ private:
 	jmethodID _enter_pip_mode = nullptr;
 	jmethodID _set_pip_mode_aspect_ratio = nullptr;
 	jmethodID _set_auto_enter_pip_mode_on_background = nullptr;
+	jmethodID _get_hdr_capabilities = nullptr;
+	jmethodID _enable_extended_range_brightness = nullptr;
+	jmethodID _disable_extended_range_brightness = nullptr;
 
 public:
 	GodotJavaWrapper(JNIEnv *p_env, jobject p_godot_native_bridge);
@@ -166,4 +175,8 @@ public:
 	void enter_pip_mode();
 	void set_pip_mode_aspect_ratio(int p_numerator, int p_denominator);
 	void set_auto_enter_pip_mode_on_background(bool p_auto_enter_on_background);
+
+	AndroidHdrCapabilities get_hdr_capabilities();
+	void enable_extended_range_brightness(float current_buffer_ratio, float desired_ratio);
+	void disable_extended_range_brightness();
 };

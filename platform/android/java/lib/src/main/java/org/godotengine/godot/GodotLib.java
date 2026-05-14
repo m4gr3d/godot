@@ -323,4 +323,9 @@ public class GodotLib {
 	static native boolean hasFeature(String feature);
 
 	static native void onPictureInPictureModeChanged(boolean isInPictureInPictureMode);
+
+	/**
+	 * Invoked when the display HDR/SDR ratio changes.
+	 */
+	static native void onHdrSdrRatioChanged(float ratio);
 }

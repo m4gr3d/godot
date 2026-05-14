@@ -49,8 +49,6 @@ import android.view.Display;
 import android.view.DisplayCutout;
 import android.view.Surface;
 import android.view.View;
-import android.view.WindowInsets;
-import android.view.WindowManager;
 
 import androidx.core.content.FileProvider;
 import androidx.core.graphics.Insets;

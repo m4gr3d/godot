@@ -36,12 +36,14 @@ import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.res.Configuration
+import android.hardware.DataSpace
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
 import android.util.Rational
 import android.util.TypedValue
+import android.view.SurfaceControl
 import androidx.annotation.Keep
 import androidx.core.net.toUri
 import org.godotengine.godot.Godot
@@ -55,6 +57,7 @@ import org.godotengine.godot.utils.GodotNetUtils
 import org.godotengine.godot.utils.beginBenchmarkMeasure
 import org.godotengine.godot.utils.dumpBenchmark
 import org.godotengine.godot.utils.endBenchmarkMeasure
+import java.util.function.Consumer
 import org.godotengine.godot.variant.Callable as GodotCallable
 
 /**
@@ -64,14 +67,17 @@ import org.godotengine.godot.variant.Callable as GodotCallable
  * not be accessible by the rest of the java/kotlin code.
  */
 @Keep
-internal class GodotNativeBridge(private val godot: Godot) {
+internal class GodotNativeBridge(private val godot: Godot) : SurfaceControl.TransactionCommittedListener,
+	Consumer<SurfaceControl.TransactionStats> {
 
 	companion object {
 		private val TAG = GodotNativeBridge::class.java.simpleName
-
 	}
 
 	private val vibratorService: Vibrator? by lazy { godot.context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
+
+	private val hdrTransaction = SurfaceControl.Transaction()
+	private var currentBufferRatio = 1.0f
 
 	/**
 	 * Invoked on the render thread when the Godot setup is complete.
@@ -431,5 +437,50 @@ internal class GodotNativeBridge(private val godot: Godot) {
 				hostActivity.updatePiPParams(enableAutoEnter = autoEnterPiPOnBackground)
 			}
 		}
+	}
+
+	private fun nativeGetHdrCapabilities(): FloatArray {
+		val result = FloatArray(3)
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+			val display = getActivity()?.display ?: godot.context.display
+			val capabilities = display.hdrCapabilities
+
+			// The size and order of this array is critical, make sure it matches with java_godot_wrapper!
+			result[0] = if (display.isHdr && display.isHdrSdrRatioAvailable) 1.0f else 0.0f
+			result[1] = capabilities.desiredMaxLuminance
+			result[2] = if (display.isHdrSdrRatioAvailable) display.hdrSdrRatio else -1.0f
+		}
+
+		return result
+	}
+
+	private fun nativeEnableExtendedRangeBrightness(currentBufferRatio: Float, desiredRatio: Float) {
+		val surfaceControl = godot.renderView?.view?.surfaceControl ?: return
+		hdrTransaction.setDataSpace(surfaceControl, DataSpace.DATASPACE_SCRGB)
+			.setExtendedRangeBrightness(surfaceControl, currentBufferRatio, desiredRatio)
+			.addTransactionCommittedListener(getActivity()!!.mainExecutor, this)
+			.addTransactionCompletedListener(getActivity()!!.mainExecutor, this)
+			.apply()
+		this.currentBufferRatio = desiredRatio
+		Log.d(TAG, "FHK - Enabled extended range brightness - $currentBufferRatio - $desiredRatio...")
+	}
+
+	private fun nativeDisableExtendedRangeBrightness() {
+		val surfaceControl = godot.renderView?.view?.surfaceControl ?: return
+		hdrTransaction.setExtendedRangeBrightness(surfaceControl, this.currentBufferRatio, 1.0f)
+			.setDataSpace(surfaceControl, DataSpace.DATASPACE_SRGB)
+			.addTransactionCommittedListener(getActivity()!!.mainExecutor, this)
+			.addTransactionCompletedListener(getActivity()!!.mainExecutor, this)
+			.apply()
+		Log.d(TAG, "FHK - Disabled extended range brightness...")
+	}
+
+	override fun onTransactionCommitted() {
+		Log.d(TAG, "FHK - Hdr transaction committed!")
+	}
+
+	override fun accept(p0: SurfaceControl.TransactionStats) {
+		Log.d(TAG, "FHK - Hdr transaction completed!")
 	}
 }

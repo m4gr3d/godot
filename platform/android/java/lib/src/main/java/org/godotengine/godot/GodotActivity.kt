@@ -98,10 +98,10 @@ abstract class GodotActivity : FragmentActivity(), GodotHost, PictureInPicturePr
 	 */
 	protected fun sanitizeLaunchIntent(launchIntent: Intent = intent): Intent {
 		val targetComponent = launchIntent.component ?: componentName
-		val activityInfo = packageManager.getActivityInfo(targetComponent, 0)
-		if (activityInfo.exported) {
-			launchIntent.removeExtra(EXTRA_COMMAND_LINE_PARAMS)
-		}
+//		val activityInfo = packageManager.getActivityInfo(targetComponent, 0)
+//		if (activityInfo.exported) {
+//			launchIntent.removeExtra(EXTRA_COMMAND_LINE_PARAMS)
+//		}
 
 		return launchIntent
 	}
@@ -113,11 +113,11 @@ abstract class GodotActivity : FragmentActivity(), GodotHost, PictureInPicturePr
 	protected fun retrieveCommandLineParamsFromLaunchIntent(launchIntent: Intent = intent): Array<String> {
 		val targetComponent = launchIntent.component ?: componentName
 		val activityInfo = packageManager.getActivityInfo(targetComponent, 0)
-		if (!activityInfo.exported) {
+//		if (!activityInfo.exported) {
 			val params = launchIntent.getStringArrayExtra(EXTRA_COMMAND_LINE_PARAMS)
 			return params ?: emptyArray()
-		}
-		return emptyArray()
+//		}
+//		return emptyArray()
 	}
 
 	@CallSuper

@@ -38,6 +38,8 @@
 
 #include <thirdparty/misc/smolv.h>
 
+#include <vk_enum_string_helper.h>
+
 #if defined(SWAPPY_FRAME_PACING_ENABLED)
 #include "platform/android/java_godot_wrapper.h"
 #include "platform/android/os_android.h"
@@ -3479,14 +3481,22 @@ bool RenderingDeviceDriverVulkan::_determine_swap_chain_format(RenderingContextD
 		return true;
 	}
 
+	print_line("FHK - Printing out format list...");
+	for (uint32_t i = 0; i < format_count; i++) {
+		print_line("FHK - Format:", string_VkFormat(formats[i].format), "color space:", string_VkColorSpaceKHR(formats[i].colorSpace));
+	}
+
 	bool colorspace_supported = context_driver->is_colorspace_supported();
+	print_line("FHK - Color space supported:", colorspace_supported);
 	bool hdr_output_requested = context_driver->surface_get_hdr_output_enabled(p_surface);
+	print_line("FHK - Hdr output requested:", hdr_output_requested);
 
 	// Determine which formats to prefer based on the requested capabilities.
 	FixedVector<FormatCandidate, 6> preferred_formats;
 	if (hdr_output_requested) {
 		// Our preferred HDR format is 16-bit float + extended linear.
 		if (context_driver->is_colorspace_externally_managed()) {
+			print_line("FHK - Context driver is externally managed");
 			// When the colorspace is managed externally to the driver we need to disable its color management.
 			// The colorspace which disables color management is VK_COLOR_SPACE_PASS_THROUGH_EXT.
 			preferred_formats.push_back({ VK_FORMAT_R16G16B16A16_SFLOAT, VK_COLOR_SPACE_PASS_THROUGH_EXT, COLOR_SPACE_REC709_LINEAR });
@@ -3494,7 +3504,16 @@ bool RenderingDeviceDriverVulkan::_determine_swap_chain_format(RenderingContextD
 			// SRGB_NONLINEAR_KHR is required for some NVIDIA drivers that support HDR output but do not support PASS_THROUGH_EXT.
 			preferred_formats.push_back({ VK_FORMAT_R16G16B16A16_SFLOAT, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR, COLOR_SPACE_REC709_LINEAR });
 		} else if (colorspace_supported) {
+			print_line("FHK - Context driver is not externally managed");
+#ifdef ANDROID_ENABLED
+			print_line("FHK - Using COLOR_SPACE_REC709_NONLINEAR_SRGB_HDR");
+			preferred_formats.push_back({ VK_FORMAT_A2R10G10B10_UNORM_PACK32, VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT, COLOR_SPACE_REC709_NONLINEAR_SRGB_HDR });
+			preferred_formats.push_back({ VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT, COLOR_SPACE_REC709_NONLINEAR_SRGB_HDR });
+			preferred_formats.push_back({ VK_FORMAT_R16G16B16A16_SFLOAT, VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT, COLOR_SPACE_REC709_NONLINEAR_SRGB_HDR });
+#else
+			print_line("FHK - Using COLOR_SPACE_REC709_LINEAR");
 			preferred_formats.push_back({ VK_FORMAT_R16G16B16A16_SFLOAT, VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT, COLOR_SPACE_REC709_LINEAR });
+#endif
 		}
 	}
 
@@ -3516,6 +3535,7 @@ bool RenderingDeviceDriverVulkan::_determine_swap_chain_format(RenderingContextD
 				r_format = formats[i].format;
 				r_color_space = formats[i].colorSpace;
 				r_rdd_color_space = candidate.rdd_colorspace;
+				print_line("FHK - Selected format", string_VkFormat(r_format), " with color space", string_VkColorSpaceKHR(r_color_space));
 				found = true;
 				break;
 			}
@@ -4001,6 +4021,10 @@ RDD::DataFormat RenderingDeviceDriverVulkan::swap_chain_get_format(SwapChainID p
 			return DATA_FORMAT_B8G8R8A8_UNORM;
 		case VK_FORMAT_R8G8B8A8_UNORM:
 			return DATA_FORMAT_R8G8B8A8_UNORM;
+		case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+			return DATA_FORMAT_A2B10G10R10_UNORM_PACK32;
+		case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+			return DATA_FORMAT_A2R10G10B10_UNORM_PACK32;
 		case VK_FORMAT_R16G16B16A16_SFLOAT:
 			return DATA_FORMAT_R16G16B16A16_SFLOAT;
 		default:

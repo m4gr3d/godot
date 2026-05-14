@@ -88,6 +88,7 @@ layout(binding = 0) uniform sampler2D src_rt;
 // Keep in sync with `RenderingDeviceCommons::ColorSpace`.
 #define COLOR_SPACE_REC709_LINEAR 0
 #define COLOR_SPACE_REC709_NONLINEAR_SRGB 1
+#define COLOR_SPACE_REC709_NONLINEAR_SRGB_HDR 2
 
 vec3 srgb_to_linear(vec3 color) {
 	return mix(pow((color.rgb + vec3(0.055)) * (1.0 / (1.0 + 0.055)), vec3(2.4)), color.rgb * (1.0 / 12.92), lessThan(color.rgb, vec3(0.04045)));
@@ -103,7 +104,7 @@ vec3 linear_to_srgb(vec3 color) {
 // NOTE: `frag_coord` is in pixels (i.e. not normalized UV).
 // This dithering must be applied after encoding changes (linear/nonlinear) have been applied
 // as the final step before quantization from floating point to integer values.
-vec3 screen_space_dither(vec2 frag_coord) {
+vec3 screen_space_dither(vec2 frag_coord, float bit_alignment_divider) {
 	// Iestyn's RGB dither (7 asm instructions) from Portal 2 X360, slightly modified for VR.
 	// Removed the time component to avoid passing time into this shader.
 	vec3 dither = vec3(dot(vec2(171.0, 231.0), frag_coord));
@@ -111,8 +112,7 @@ vec3 screen_space_dither(vec2 frag_coord) {
 
 	// Subtract 0.5 to avoid slightly brightening the whole viewport.
 	// Use a dither strength of 100% rather than the 37.5% suggested by the original source.
-	// Divide by 255 to align to 8-bit quantization.
-	return (dither.rgb - 0.5) / 255.0;
+	return (dither.rgb - 0.5) / bit_alignment_divider;
 }
 
 void main() {
@@ -184,8 +184,23 @@ void main() {
 			// case, GPU driver rounding error can add noise so debanding should be
 			// skipped entirely.
 			if (data.use_debanding) {
-				color.rgb += screen_space_dither(gl_FragCoord.xy);
+				// Divide by 255 to align to 8-bit quantization.
+				color.rgb += screen_space_dither(gl_FragCoord.xy, 255.0);
 			}
+		}
+	} else if (data.target_color_space == COLOR_SPACE_REC709_NONLINEAR_SRGB_HDR) {
+		// Negative values and values above output_max_value will be clipped by the target,
+		// so no need to clip them here.
+
+		// Android HDR scaling
+		color.rgb *= data.reference_multiplier;
+
+		// linear -> sRGB conversion
+		color.rgb = linear_to_srgb(color.rgb);
+
+		if (data.use_debanding) {
+			// Divide by 1023 to align to 10-bit quantization.
+			color.rgb += screen_space_dither(gl_FragCoord.xy, 1023.0);
 		}
 	}
 }

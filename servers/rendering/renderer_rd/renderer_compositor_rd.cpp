@@ -55,7 +55,7 @@ void RendererCompositorRD::blit_render_targets_to_screen(DisplayServerEnums::Win
 	const float reference_luminance = RD::get_singleton()->get_context_driver()->window_get_hdr_output_reference_luminance(p_screen);
 	const float linear_luminance_scale = RD::get_singleton()->get_context_driver()->window_get_hdr_output_linear_luminance_scale(p_screen);
 	const float output_max_value = RD::get_singleton()->get_context_driver()->window_get_output_max_linear_value(p_screen);
-	const float reference_multiplier = _compute_reference_multiplier(color_space, reference_luminance, linear_luminance_scale);
+	const float reference_multiplier = _compute_reference_multiplier(color_space, reference_luminance, linear_luminance_scale, output_max_value);
 
 	for (int i = 0; i < p_amount; i++) {
 		RID rd_texture = texture_storage->render_target_get_rd_texture(p_render_targets[i].render_target);
@@ -202,11 +202,18 @@ RendererCompositorRD::BlitPipelines RendererCompositorRD::_get_blit_pipelines_fo
 	return pipelines;
 }
 
-float RendererCompositorRD::_compute_reference_multiplier(RD::ColorSpace p_color_space, const float p_reference_luminance, const float p_linear_luminance_scale) {
+float RendererCompositorRD::_compute_reference_multiplier(RD::ColorSpace p_color_space, const float p_reference_luminance, const float p_linear_luminance_scale, const float p_output_max_linear_value) {
 	switch (p_color_space) {
-		case RD::COLOR_SPACE_REC709_LINEAR:
-			return p_reference_luminance / p_linear_luminance_scale;
+		case RD::COLOR_SPACE_REC709_LINEAR: {
+			float result = p_reference_luminance / p_linear_luminance_scale;
+			//			print_line("FHK - Reference multiplier for COLOR_SPACE_REC709_LINEAR:", result);
+			return result;
+		}
+		case RD::COLOR_SPACE_REC709_NONLINEAR_SRGB_HDR:
+			print_line("FHK - Reference multiplier for COLOR_SPACE_REC709_NONLINEAR_SRGB_HDR:", p_output_max_linear_value);
+			return p_output_max_linear_value;
 		default:
+			//			print_line("FHK - Reference multiplier for color space", p_color_space, ": 1.0f");
 			return 1.0f;
 	}
 }
@@ -256,7 +263,7 @@ void RendererCompositorRD::set_boot_image_with_stretch(const Ref<Image> &p_image
 	const float reference_luminance = RD::get_singleton()->get_context_driver()->window_get_hdr_output_reference_luminance(DisplayServerEnums::MAIN_WINDOW_ID);
 	const float linear_luminance_scale = RD::get_singleton()->get_context_driver()->window_get_hdr_output_linear_luminance_scale(DisplayServerEnums::MAIN_WINDOW_ID);
 	const float output_max_value = RD::get_singleton()->get_context_driver()->window_get_output_max_linear_value(DisplayServerEnums::MAIN_WINDOW_ID);
-	const float reference_multiplier = _compute_reference_multiplier(color_space, reference_luminance, linear_luminance_scale);
+	const float reference_multiplier = _compute_reference_multiplier(color_space, reference_luminance, linear_luminance_scale, output_max_value);
 
 	Color clear_color = p_color;
 	if (color_space != RD::COLOR_SPACE_REC709_NONLINEAR_SRGB) {

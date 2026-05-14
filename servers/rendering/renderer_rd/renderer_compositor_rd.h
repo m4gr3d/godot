@@ -115,7 +115,7 @@ protected:
 	static RendererCompositorRD *singleton;
 
 	BlitPipelines _get_blit_pipelines_for_format(RenderingDevice::FramebufferFormatID format);
-	float _compute_reference_multiplier(RD::ColorSpace p_color_space, const float p_reference_luminance, const float p_linear_luminance_scale);
+	float _compute_reference_multiplier(RD::ColorSpace p_color_space, const float p_reference_luminance, const float p_linear_luminance_scale, const float p_output_max_linear_value);
 
 public:
 	virtual RendererUtilities *get_utilities() override { return utilities; }

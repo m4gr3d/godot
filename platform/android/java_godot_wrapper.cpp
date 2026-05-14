@@ -103,6 +103,11 @@ GodotJavaWrapper::GodotJavaWrapper(JNIEnv *p_env, jobject p_godot_native_bridge)
 	_enter_pip_mode = p_env->GetMethodID(godot_native_bridge_class, "nativeEnterPiPMode", "()V");
 	_set_pip_mode_aspect_ratio = p_env->GetMethodID(godot_native_bridge_class, "nativeSetPiPModeAspectRatio", "(II)V");
 	_set_auto_enter_pip_mode_on_background = p_env->GetMethodID(godot_native_bridge_class, "nativeSetAutoEnterPiPModeOnBackground", "(Z)V");
+
+	// HDR method ids.
+	_get_hdr_capabilities = p_env->GetMethodID(godot_native_bridge_class, "nativeGetHdrCapabilities", "()[F");
+	_enable_extended_range_brightness = p_env->GetMethodID(godot_native_bridge_class, "nativeEnableExtendedRangeBrightness", "(FF)V");
+	_disable_extended_range_brightness = p_env->GetMethodID(godot_native_bridge_class, "nativeDisableExtendedRangeBrightness", "()V");
 }
 
 GodotJavaWrapper::~GodotJavaWrapper() {
@@ -755,4 +760,36 @@ void GodotJavaWrapper::set_auto_enter_pip_mode_on_background(bool p_auto_enter_o
 		ERR_FAIL_NULL(env);
 		env->CallVoidMethod(godot_native_bridge, _set_auto_enter_pip_mode_on_background, p_auto_enter_on_background);
 	}
+}
+
+AndroidHdrCapabilities GodotJavaWrapper::get_hdr_capabilities() {
+	AndroidHdrCapabilities result = {};
+
+	ERR_FAIL_NULL_V(_get_hdr_capabilities, result);
+	JNIEnv *env = get_jni_env();
+	ERR_FAIL_NULL_V(env, result);
+	jfloatArray returnArray = (jfloatArray)env->CallObjectMethod(godot_native_bridge, _get_hdr_capabilities);
+	ERR_FAIL_COND_V(env->GetArrayLength(returnArray) != 3, result);
+	jfloat *arrayBody = env->GetFloatArrayElements(returnArray, JNI_FALSE);
+
+	result.hdr_supported = arrayBody[0] > 0.0f;
+	result.max_luminance = arrayBody[1];
+	result.hdr_sdr_ratio = arrayBody[2];
+
+	env->ReleaseFloatArrayElements(returnArray, arrayBody, 0);
+	return result;
+}
+
+void GodotJavaWrapper::enable_extended_range_brightness(float current_buffer_ratio, float desired_ratio) {
+	ERR_FAIL_NULL(_enable_extended_range_brightness);
+	JNIEnv *env = get_jni_env();
+	ERR_FAIL_NULL(env);
+	env->CallVoidMethod(godot_native_bridge, _enable_extended_range_brightness, current_buffer_ratio, desired_ratio);
+}
+
+void GodotJavaWrapper::disable_extended_range_brightness() {
+	ERR_FAIL_NULL(_disable_extended_range_brightness);
+	JNIEnv *env = get_jni_env();
+	ERR_FAIL_NULL(env);
+	env->CallVoidMethod(godot_native_bridge, _disable_extended_range_brightness);
 }

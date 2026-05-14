@@ -59,6 +59,7 @@
 #if defined(RD_ENABLED)
 static RenderingContextDriver *rendering_context_global = nullptr;
 static bool rendering_context_global_checked = false;
+static constexpr float desired_hdr_ratio = 4.0f;
 #endif
 
 DisplayServerAndroid *DisplayServerAndroid::get_singleton() {
@@ -98,6 +99,7 @@ bool DisplayServerAndroid::has_feature(DisplayServerEnums::Feature p_feature) co
 		case DisplayServerEnums::FEATURE_TOUCHSCREEN:
 		case DisplayServerEnums::FEATURE_VIRTUAL_KEYBOARD:
 		case DisplayServerEnums::FEATURE_TEXT_TO_SPEECH:
+		case DisplayServerEnums::FEATURE_HDR_OUTPUT:
 			return true;
 		default:
 			return false;
@@ -459,6 +461,45 @@ void DisplayServerAndroid::_window_callback(const Callable &p_callable, bool p_d
 	}
 }
 
+void DisplayServerAndroid::_update_hdr_output(const AndroidHdrCapabilities &p_hdr_capabilities, DisplayServerEnums::WindowID p_window) {
+#ifdef RD_ENABLED
+	if (rendering_context_global) {
+		bool current_hdr_enabled = rendering_context_global->window_get_hdr_output_enabled(p_window);
+		bool desired_hdr_enabled = hdr_output_requests[p_window] && p_hdr_capabilities.hdr_supported;
+
+		// hdr_sdr_ratio is defined as targetHdrPeakBrightnessInNits / targetSdrWhitePointInNits
+		float sdr_reference = p_hdr_capabilities.max_luminance / p_hdr_capabilities.hdr_sdr_ratio;
+
+		// Recompute max limit based on current HDR ratio.
+		float max_reference = sdr_reference * MAX(p_hdr_capabilities.hdr_sdr_ratio, desired_hdr_ratio);
+
+		if (current_hdr_enabled != desired_hdr_enabled) {
+			rendering_context_global->window_set_hdr_output_enabled(p_window, desired_hdr_enabled);
+			rendering_context_global->window_set_hdr_output_linear_luminance_scale(p_window, sdr_reference);
+
+			GodotJavaWrapper *godot_java = OS_Android::get_singleton()->get_godot_java();
+			if (godot_java) {
+				if (desired_hdr_enabled) {
+					godot_java->enable_extended_range_brightness(p_hdr_capabilities.hdr_sdr_ratio, desired_hdr_ratio);
+				} else {
+					godot_java->disable_extended_range_brightness();
+				}
+			}
+		}
+
+		if (sdr_reference > 0.0f) {
+			rendering_context_global->window_set_hdr_output_reference_luminance(p_window, sdr_reference);
+		}
+
+		if (max_reference > 0.0f) {
+			rendering_context_global->window_set_hdr_output_max_luminance(p_window, max_reference);
+		}
+
+		send_window_event(DisplayServerEnums::WINDOW_EVENT_OUTPUT_MAX_LINEAR_VALUE_CHANGED);
+	}
+#endif // RD_ENABLED
+}
+
 void DisplayServerAndroid::send_window_event(DisplayServerEnums::WindowEvent p_event, bool p_deferred) const {
 	_window_callback(window_event_callback, p_deferred, int(p_event));
 }
@@ -644,6 +685,85 @@ void DisplayServerAndroid::window_set_color(const Color &p_color) {
 	godot_java->set_window_color(p_color);
 }
 
+bool DisplayServerAndroid::window_is_hdr_output_supported(DisplayServerEnums::WindowID p_window) const {
+#if defined(RD_ENABLED)
+	if (rendering_device && !rendering_device->has_feature(RenderingDevice::Features::SUPPORTS_HDR_OUTPUT)) {
+		return false; // HDR output is not supported by the rendering device.
+	}
+#endif
+
+	GodotJavaWrapper *godot_java = OS_Android::get_singleton()->get_godot_java();
+	ERR_FAIL_NULL_V(godot_java, false);
+	AndroidHdrCapabilities capabilities = godot_java->get_hdr_capabilities();
+	return capabilities.hdr_supported;
+}
+
+void DisplayServerAndroid::window_request_hdr_output(const bool p_enable, DisplayServerEnums::WindowID p_window) {
+#if defined(RD_ENABLED)
+	ERR_FAIL_COND_MSG(p_enable && (rendering_device && rendering_device->has_feature(RenderingDevice::Features::SUPPORTS_HDR_OUTPUT)) == false, "HDR output is not supported by the rendering device.");
+#endif
+
+	hdr_output_requests[p_window] = p_enable;
+
+	GodotJavaWrapper *godot_java = OS_Android::get_singleton()->get_godot_java();
+	ERR_FAIL_NULL(godot_java);
+	AndroidHdrCapabilities data = godot_java->get_hdr_capabilities();
+
+	_update_hdr_output(data, p_window);
+}
+
+bool DisplayServerAndroid::window_is_hdr_output_requested(DisplayServerEnums::WindowID p_window) const {
+	return hdr_output_requests[p_window];
+}
+
+bool DisplayServerAndroid::window_is_hdr_output_enabled(DisplayServerEnums::WindowID p_window) const {
+#if defined(RD_ENABLED)
+	if (rendering_context_global) {
+		return rendering_context_global->window_get_hdr_output_enabled(p_window);
+	}
+#endif
+
+	return false;
+}
+
+void DisplayServerAndroid::window_set_hdr_output_reference_luminance(const float p_reference_luminance, DisplayServerEnums::WindowID p_window) {
+	ERR_PRINT_ONCE("Manually setting reference luminance is not supported on Android devices.");
+}
+
+float DisplayServerAndroid::window_get_hdr_output_current_reference_luminance(DisplayServerEnums::WindowID p_window) const {
+#if defined(RD_ENABLED)
+	if (rendering_context_global) {
+		return rendering_context_global->window_get_hdr_output_reference_luminance(p_window);
+	}
+#endif
+
+	return 0.0f;
+}
+
+void DisplayServerAndroid::window_set_hdr_output_max_luminance(const float p_max_luminance, DisplayServerEnums::WindowID p_window) {
+	ERR_PRINT_ONCE("Manually setting max luminance is not supported on Android devices.");
+}
+
+float DisplayServerAndroid::window_get_hdr_output_current_max_luminance(DisplayServerEnums::WindowID p_window) const {
+#if defined(RD_ENABLED)
+	if (rendering_context_global) {
+		return rendering_context_global->window_get_hdr_output_max_luminance(p_window);
+	}
+#endif
+
+	return 0.0f;
+}
+
+float DisplayServerAndroid::window_get_output_max_linear_value(DisplayServerEnums::WindowID p_window) const {
+#if defined(RD_ENABLED)
+	if (rendering_context_global) {
+		return rendering_context_global->window_get_output_max_linear_value(p_window);
+	}
+#endif
+
+	return 1.0f; // SDR
+}
+
 void DisplayServerAndroid::process_events() {
 	Input::get_singleton()->flush_buffered_events();
 }
@@ -776,6 +896,16 @@ void DisplayServerAndroid::notify_application_paused() {
 		rendering_device->update_pipeline_cache();
 	}
 #endif // defined(RD_ENABLED)
+}
+
+void DisplayServerAndroid::notify_hdr_changed() {
+	GodotJavaWrapper *godot_java = OS_Android::get_singleton()->get_godot_java();
+	ERR_FAIL_NULL(godot_java);
+	AndroidHdrCapabilities data = godot_java->get_hdr_capabilities();
+
+	for (KeyValue<DisplayServerEnums::WindowID, bool> &request : hdr_output_requests) {
+		_update_hdr_output(data, request.key);
+	}
 }
 
 DisplayServerAndroid::DisplayServerAndroid(const String &p_rendering_driver, DisplayServerEnums::WindowMode p_mode, DisplayServerEnums::VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, DisplayServerEnums::Context p_context, int64_t p_parent_window, Error &r_error) {

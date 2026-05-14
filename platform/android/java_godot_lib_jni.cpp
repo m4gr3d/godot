@@ -744,4 +744,14 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_onPictureInPictureMod
 		}
 	}
 }
+
+JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_onHdrSdrRatioChanged(JNIEnv *env, jclass clazz, jfloat p_ratio) {
+	if (step.get() <= STEP_SETUP) {
+		return;
+	}
+
+	if (DisplayServerAndroid *dsa = DisplayServerAndroid::get_singleton()) {
+		dsa->notify_hdr_changed();
+	}
+}
 }
