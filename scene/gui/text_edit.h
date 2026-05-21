@@ -525,8 +525,14 @@ private:
 
 	bool touch_dragging_starting = false;
 	bool touch_dragging_in_progress = false;
+	bool touch_dragging_deaccel = false;
 	Vector2 drag_accum;
 	Vector2 drag_from;
+	Vector2 drag_speed;
+	Vector2 last_drag_accum;
+	double time_since_motion = 0.0;
+
+	void _cancel_inertial_scroll();
 
 	void _on_drag_or_mouse_motion_event(Vector2i p_event_position, bool p_is_left_click_or_drag);
 

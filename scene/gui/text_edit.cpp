@@ -891,7 +891,70 @@ void TextEdit::_notification(int p_what) {
 		} break;
 
 		case NOTIFICATION_INTERNAL_PROCESS: {
-			if (scrolling && get_v_scroll() != target_v_scroll) {
+			if (touch_dragging_starting || touch_dragging_in_progress || touch_dragging_deaccel) {
+				if (touch_dragging_deaccel) {
+					// Deceleration handling loop; finger-up after flick.
+					Vector2 pos = Vector2(h_scroll->get_value(), v_scroll->get_value());
+
+					float line_height = MAX(1, get_line_height());
+					Vector2 frame_movement = drag_speed * get_process_delta_time();
+
+					pos.x += frame_movement.x;
+					pos.y += frame_movement.y / line_height;
+
+					bool turnoff_h = false;
+					bool turnoff_v = false;
+
+					if (pos.x < 0) {
+						pos.x = 0;
+						turnoff_h = true;
+					}
+					if (pos.x > (h_scroll->get_max() - h_scroll->get_page())) {
+						pos.x = h_scroll->get_max() - h_scroll->get_page();
+						turnoff_h = true;
+					}
+
+					if (pos.y < 0) {
+						pos.y = 0;
+						turnoff_v = true;
+					}
+					if (pos.y > (v_scroll->get_max() - v_scroll->get_page())) {
+						pos.y = v_scroll->get_max() - v_scroll->get_page();
+						turnoff_v = true;
+					}
+
+					h_scroll->scroll_to(pos.x);
+					v_scroll->scroll_to(pos.y);
+
+					float sgn_x = drag_speed.x < 0 ? -1 : 1;
+					float val_x = Math::abs(drag_speed.x);
+					val_x -= 1000.0f * get_process_delta_time();
+					if (val_x < 0) {
+						turnoff_h = true;
+					}
+
+					float sgn_y = drag_speed.y < 0 ? -1 : 1;
+					float val_y = Math::abs(drag_speed.y);
+					val_y -= 1000.0f * get_process_delta_time();
+					if (val_y < 0) {
+						turnoff_v = true;
+					}
+
+					drag_speed = Vector2(sgn_x * val_x, sgn_y * val_y);
+
+					if (turnoff_h && turnoff_v) {
+						_cancel_inertial_scroll();
+					}
+				} else {
+					// Active touch scrolling; finger-down.
+					if (time_since_motion == 0.0 || time_since_motion > 0.1) {
+						Vector2 diff = drag_accum - last_drag_accum;
+						last_drag_accum = drag_accum;
+						drag_speed = diff / get_process_delta_time();
+					}
+					time_since_motion += get_process_delta_time();
+				}
+			} else if (scrolling && get_v_scroll() != target_v_scroll) {
 				double target_y = target_v_scroll - get_v_scroll();
 				double dist = std::abs(target_y);
 				// To ensure minimap is responsive override the speed setting.
@@ -2577,7 +2640,7 @@ void TextEdit::gui_input(const Ref<InputEvent> &p_gui_input) {
 
 	Ref<InputEventScreenTouch> touch = p_gui_input;
 	if (touch.is_valid() && event_device_id != InputEvent::DEVICE_ID_EMULATION) {
-		show_selection_handle = true; // Showing selection handle because native touch input is used.
+		show_selection_handle = true;
 
 		// Prioritizing selection handle input
 		if (touch->is_pressed()) {
@@ -2595,12 +2658,14 @@ void TextEdit::gui_input(const Ref<InputEvent> &p_gui_input) {
 				if (touch->get_position().distance_to(start_pos + Vector2(0, line_height + selection_handle_radius)) < selection_handle_radius * 2) {
 					selection_handle_drag_type = SELECTION_HANDLE_START;
 					dragging_caret_index = c;
+					_cancel_inertial_scroll();
 					accept_event();
 					return; // Return early to block default touch logic
 				}
 				if (touch->get_position().distance_to(end_pos + Vector2(0, line_height + selection_handle_radius)) < selection_handle_radius * 2) {
 					selection_handle_drag_type = SELECTION_HANDLE_END;
 					dragging_caret_index = c;
+					_cancel_inertial_scroll();
 					accept_event();
 					return;
 				}
@@ -2615,10 +2680,21 @@ void TextEdit::gui_input(const Ref<InputEvent> &p_gui_input) {
 		}
 
 		if (touch->is_pressed() && !touch->is_double_tap()) {
-			// We treat a single touch press event as the initiation of touch dragging.
+			if (touch_dragging_deaccel) {
+				_cancel_inertial_scroll();
+			}
+
 			touch_dragging_starting = true;
+			touch_dragging_in_progress = false;
+
+			drag_speed = Vector2();
 			drag_accum = Vector2();
+			last_drag_accum = Vector2();
 			drag_from = Vector2(prev_h_scroll, prev_v_scroll);
+			touch_dragging_deaccel = false;
+			time_since_motion = 0.0;
+
+			set_process_internal(true);
 		}
 
 		if ((touch->is_pressed() && touch->is_double_tap()) || (touch->is_released() && !touch->is_double_tap() && !touch_dragging_in_progress)) {
@@ -2746,7 +2822,15 @@ void TextEdit::gui_input(const Ref<InputEvent> &p_gui_input) {
 					}
 				}
 			}
-			// This signals the end of a single touch press, a double tap, or a drag event, so we reset the touch dragging flags.
+
+			if (touch_dragging_starting || touch_dragging_in_progress) {
+				if (touch->is_canceled() || drag_speed == Vector2()) {
+					_cancel_inertial_scroll();
+				} else {
+					touch_dragging_deaccel = true;
+				}
+			}
+
 			touch_dragging_starting = false;
 			touch_dragging_in_progress = false;
 		}
@@ -2773,16 +2857,23 @@ void TextEdit::gui_input(const Ref<InputEvent> &p_gui_input) {
 			return;
 		}
 
-		if (touch_dragging_starting) {
-			// Follow up from a single tap touch event handled above; we perform touch dragging.
+		// If we've started dragging and aren't actively processing deceleration momentum
+		if (touch_dragging_starting && !touch_dragging_deaccel) {
 			touch_dragging_in_progress = true;
 			Vector2 motion = drag->get_relative();
-			drag_accum.y -= motion.y / (20.0 * theme_cache.base_scale);
-			drag_accum.x -= motion.x / theme_cache.base_scale;
 
-			Vector2 diff = drag_from + drag_accum;
+			drag_accum -= motion;
+
+			// Convert the vertical accumulation from raw pixels to lines
+			float line_height = MAX(1, get_line_height());
+			float vertical_line_offset = drag_accum.y / line_height;
+
+			Vector2 diff = drag_from + Vector2(drag_accum.x, vertical_line_offset);
 			h_scroll->scroll_to(diff.x);
 			v_scroll->scroll_to(diff.y);
+
+			time_since_motion = 0.0;
+			accept_event();
 		} else {
 			// Likely follow up from a double tap touch event; we apply similar logic as the mouse motion logic.
 			_on_drag_or_mouse_motion_event(drag->get_position(), true);
@@ -3161,6 +3252,15 @@ void TextEdit::_on_drag_or_mouse_motion_event(Vector2i p_event_position, bool p_
 		set_caret_column(pos.x, true, drag_caret_index);
 		dragging_selection = true;
 	}
+}
+
+void TextEdit::_cancel_inertial_scroll() {
+	set_process_internal(false);
+	touch_dragging_deaccel = false;
+	drag_speed = Vector2();
+	drag_accum = Vector2();
+	last_drag_accum = Vector2();
+	drag_from = Vector2();
 }
 
 /* Input actions. */
