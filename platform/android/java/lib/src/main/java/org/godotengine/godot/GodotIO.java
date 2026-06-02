@@ -160,7 +160,11 @@ public class GodotIO {
 	}
 
 	public String getDataDir() {
-		return getContext().getFilesDir().getAbsolutePath();
+		return getDataDir(getContext());
+	}
+
+	public static String getDataDir(Context context) {
+		return context.getFilesDir().getAbsolutePath();
 	}
 
 	public String getLocale() {

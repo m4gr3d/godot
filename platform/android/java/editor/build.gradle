@@ -2,6 +2,7 @@
 plugins {
     id 'com.android.application'
     id 'base'
+    id 'com.google.devtools.ksp'
 }
 
 ext {
@@ -206,6 +207,12 @@ dependencies {
 
     implementation "org.khronos.openxr:openxr_loader_for_android:$versions.openxrLoaderVersion"
 
+    // Android App functions dependencies
+    androidImplementation("org.ini4j:ini4j:0.5.4")
+    androidImplementation("androidx.appfunctions:appfunctions:$versions.appFunctionsVersion")
+    // If this project uses any Kotlin source, use Kotlin Symbol Processing (KSP)
+    ksp("androidx.appfunctions:appfunctions-compiler:$versions.appFunctionsVersion")
+
     // Android XR dependencies
     androidImplementation "org.godotengine:godot-openxr-vendors-androidxr:$versions.openxrVendorsVersion"
     // Meta dependencies
@@ -220,6 +227,9 @@ dependencies {
     androidTestImplementation "androidx.test:runner:$versions.testRunnerVersion"
     androidTestUtil "androidx.test:orchestrator:$versions.testOrchestratorVersion"
 }
+
+// AppFunctions ksp option
+ksp { arg("appfunctions:aggregateAppFunctions", "true") }
 
 /*
  * Older versions of our vendor plugin include a loader that we no longer need.

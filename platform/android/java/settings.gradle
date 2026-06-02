@@ -7,6 +7,7 @@ pluginManagement {
         id 'com.android.library' version versions.androidGradlePlugin
         id 'com.android.asset-pack' version versions.androidGradlePlugin
         id 'io.github.gradle-nexus.publish-plugin' version versions.nexusPublishVersion
+        id 'com.google.devtools.ksp' version '2.3.7'
     }
     repositories {
         google()

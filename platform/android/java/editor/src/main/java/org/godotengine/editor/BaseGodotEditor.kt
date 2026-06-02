@@ -412,18 +412,11 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 						} else {
 							// Check if we are already editing the specified directory.
 							var isEditor = false
-							var nextIsPath = false
-							var currentPath = ""
+							val currentPath = getCurrentProjectPath()
 							for (arg in commandLine) {
-								if (nextIsPath) {
-									currentPath = arg
-									nextIsPath = false
-								}
-
 								if (arg == EDITOR_ARG || arg == EDITOR_ARG_SHORT) {
 									isEditor = true
-								} else if (arg == PATH_ARG) {
-									nextIsPath = true
+									break
 								}
 							}
 							if (!isEditor || currentPath != dataDir.absolutePath) {
@@ -436,6 +429,29 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 		}
 
 		super.handleStartIntent(intent, newLaunch)
+	}
+
+	internal fun getCurrentProjectPath(): String {
+		var nextIsPath = false
+		for (arg in commandLine) {
+			if (nextIsPath) {
+				return arg
+			}
+
+			if (arg == PATH_ARG) {
+				nextIsPath = true
+			}
+		}
+		return ""
+	}
+
+	internal fun launchProjectManager(): Boolean {
+	// TODO: Fix the launch logic; seems to create a new instance instead of reusing the existing one...
+		if (godot?.isProjectManagerHint() == true || godot?.isEditorHint() == true) {
+			onNewGodotInstanceRequested(emptyArray())
+			return true
+		}
+		return false
 	}
 
 	protected open fun shouldShowGameMenuBar() = gameMenuContainer != null
