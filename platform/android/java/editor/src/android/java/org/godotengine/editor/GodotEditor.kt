@@ -43,6 +43,7 @@ import androidx.xr.runtime.math.Quaternion
 import androidx.xr.runtime.math.Vector3
 import androidx.xr.scenecore.ActivityPanelEntity
 import androidx.xr.scenecore.MovableComponent
+import androidx.xr.scenecore.ResizableComponent
 import androidx.xr.scenecore.SpatialCapability
 import androidx.xr.scenecore.scene
 import java.util.LinkedList
@@ -86,6 +87,7 @@ open class GodotEditor : BaseGodotEditor() {
 			result.session.scene.apply{
 				addSpatialCapabilitiesChangedListener(spatialCapabilitiesChangedListener)
 				mainPanelEntity.addComponent(MovableComponent.createSystemMovable(result.session))
+				mainPanelEntity.addComponent(ResizableComponent.create(result.session) {})
 			}
 			return@lazy result.session
 		} else {
@@ -146,6 +148,7 @@ open class GodotEditor : BaseGodotEditor() {
 				scene.activitySpace
 			)
 			activityPanel.addComponent(MovableComponent.createSystemMovable(session!!))
+			activityPanel.addComponent(ResizableComponent.create(session!!) {})
 
 			// We remove the 'NEW_TASK' flag as launching in a new task prevents embedding.
 			newInstance.removeFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
