@@ -307,12 +307,18 @@ String _get_activity_tag(const Ref<EditorExportPlatform> &p_export_platform, con
 	// Update the GodotApp activity tag.
 	String orientation = _get_android_orientation_label(DisplayServerEnums::ScreenOrientation(int(p_export_platform->get_project_setting(p_preset, "display/window/handheld/orientation"))));
 	String manifest_activity_text = vformat(
-			"        <activity android:name=\".GodotApp\" "
+			"        <activity android:name=\"com.godot.game.GodotApp\" "
 			"tools:replace=\"android:screenOrientation,android:excludeFromRecents,android:resizeableActivity\" "
 			"tools:node=\"mergeOnlyAttributes\" "
+			"android:configChanges=\"layoutDirection|locale|orientation|keyboardHidden|screenSize|smallestScreenSize|density|keyboard|navigation|screenLayout|uiMode\" "
 			"android:excludeFromRecents=\"%s\" "
+			"android:exported=\"false\" "
+			"android:launchMode=\"singleInstancePerTask\" "
 			"android:screenOrientation=\"%s\" "
-			"android:resizeableActivity=\"%s\">\n",
+			"android:resizeableActivity=\"%s\" "
+			"android:supportsPictureInPicture=\"true\" "
+			"android:theme=\"@style/GodotAppSplashTheme\" "
+			"android:windowSoftInputMode=\"adjustResize\" >\n",
 			bool_to_string(p_preset->get("package/exclude_from_recents")),
 			orientation,
 			bool_to_string(bool(p_export_platform->get_project_setting(p_preset, "display/window/size/resizable"))));
@@ -327,8 +333,8 @@ String _get_activity_tag(const Ref<EditorExportPlatform> &p_export_platform, con
 	// Update the GodotAppLauncher activity tag.
 	manifest_activity_text += "        <activity-alias\n"
 							  "            tools:node=\"mergeOnlyAttributes\"\n"
-							  "            android:name=\".GodotAppLauncher\"\n"
-							  "            android:targetActivity=\".GodotApp\"\n"
+							  "            android:name=\"com.godot.game.GodotAppLauncher\"\n"
+							  "            android:targetActivity=\"com.godot.game.GodotApp\"\n"
 							  "            android:exported=\"true\">\n";
 
 	manifest_activity_text += "            <intent-filter>\n"
